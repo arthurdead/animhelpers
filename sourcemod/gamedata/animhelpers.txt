@@ -1,0 +1,55 @@
+"Games" 
+{
+	"#default"
+	{
+		"#supported"
+		{
+			"game"	"tf"
+		}
+		"Signatures"
+		{
+			"CBaseAnimating::ResetSequenceInfo"
+			{
+				"library" "server"
+				"linux" "@_ZN14CBaseAnimating17ResetSequenceInfoEv"
+			}
+			"CBaseAnimating::LockStudioHdr"
+			{
+				"library" "server"
+				"linux" "@_ZN14CBaseAnimating13LockStudioHdrEv"
+			}
+		}
+		"Offsets"
+		{
+			"CBaseEntity::WorldSpaceCenter"
+			{
+				"linux" "150"
+			}
+			"CBaseEntity::FireBullets"
+			{
+				"linux" "113"
+			}
+			"CBaseAnimating::GetBoneTransform"
+			{
+				"linux" "203"
+			}
+			"CBaseAnimating::GetAttachment"
+			{
+				"linux" "209"
+			}
+			"CBaseAnimating::StudioFrameAdvance"
+			{
+				"linux" "194"
+			}
+			"CBaseAnimating::DispatchAnimEvents"
+			{
+				"linux" "206"
+			}
+			"CBaseAnimating::m_pStudioHdr"
+			{
+				"linux" "60"
+				"windows" "60"
+			}
+		}
+	}
+}
