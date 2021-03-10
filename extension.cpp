@@ -73,9 +73,11 @@ int CBaseAnimatingDispatchAnimEvents = -1;
 int CBaseAnimatingGetAttachment = -1;
 int CBaseAnimatingGetBoneTransform = -1;
 int CBaseEntityFireBullets = -1;
+int CBaseEntityWorldSpaceCenter = -1;
 
 void *CBaseAnimatingResetSequenceInfo = nullptr;
 void *CBaseAnimatingLockStudioHdr = nullptr;
+void *CBaseEntitySetAbsOrigin = nullptr;
 
 template <typename T>
 T void_to_func(void *ptr)
@@ -194,6 +196,16 @@ public:
 	void FireBullets( const FireBulletsInfo_t &info )
 	{
 		call_vfunc<void, CBaseEntity, const FireBulletsInfo_t &>(this, CBaseEntityFireBullets, info);
+	}
+	
+	void SetAbsOrigin( const Vector& origin )
+	{
+		(this->*void_to_func<void(CBaseEntity::*)(const Vector&)>(CBaseEntitySetAbsOrigin))(origin);
+	}
+	
+	const Vector &WorldSpaceCenter()
+	{
+		return call_vfunc<const Vector &>(this, CBaseEntityWorldSpaceCenter);
 	}
 };
 
@@ -1601,7 +1613,7 @@ static cell_t BaseAnimatingResetSequenceInfo(IPluginContext *pContext, const cel
 	return 0;
 }
 
-static cell_t BaseAnimatingFireBullets(IPluginContext *pContext, const cell_t *params)
+static cell_t BaseEntityFireBullets(IPluginContext *pContext, const cell_t *params)
 {
 	CBaseAnimating *pEntity = (CBaseAnimating *)gamehelpers->ReferenceToEntity(params[1]);
 	if(!pEntity) {
@@ -1639,8 +1651,44 @@ static cell_t BaseAnimatingFireBullets(IPluginContext *pContext, const cell_t *p
 	return 0;
 }
 
+static cell_t BaseEntitySetAbsOrigin(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseEntity *pEntity = gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+	
+	cell_t *addr = nullptr;
+	pContext->LocalToPhysAddr(params[2], &addr);
+	Vector pos(sp_ctof(addr[0]), sp_ctof(addr[1]), sp_ctof(addr[2]));
+
+	pEntity->SetAbsOrigin(pos);
+	return 0;
+}
+
+static cell_t BaseEntityWorldSpaceCenter(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseEntity *pEntity = gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+	
+	cell_t *addr = nullptr;
+	pContext->LocalToPhysAddr(params[2], &addr);
+
+	const Vector &pos = pEntity->WorldSpaceCenter();
+	addr[0] = sp_ftoc(pos.x);
+	addr[1] = sp_ftoc(pos.y);
+	addr[2] = sp_ftoc(pos.z);
+
+	return 0;
+}
+
 static const sp_nativeinfo_t g_sNativesInfo[] =
 {
+	{"BaseEntity.FireBullets", BaseEntityFireBullets},
+	{"BaseEntity.SetAbsOrigin", BaseEntitySetAbsOrigin},
+	{"BaseEntity.WorldSpaceCenter", BaseEntityWorldSpaceCenter},
 	{"BaseAnimating.SelectWeightedSequenceEx", BaseAnimatingSelectWeightedSequenceEx},
 	{"BaseAnimating.LookupSequence", BaseAnimatingLookupSequence},
 	{"BaseAnimating.LookupActivity", BaseAnimatingLookupActivity},
@@ -1650,7 +1698,6 @@ static const sp_nativeinfo_t g_sNativesInfo[] =
 	{"BaseAnimating.StudioFrameAdvance", BaseAnimatingStudioFrameAdvance},
 	{"BaseAnimating.DispatchAnimEvents", BaseAnimatingDispatchAnimEvents},
 	{"BaseAnimating.ResetSequenceInfo", BaseAnimatingResetSequenceInfo},
-	{"BaseAnimating.FireBullets", BaseAnimatingFireBullets},
 	/*{"BaseAnimating.LookupAttachment", BaseAnimatingLookupAttachment},
 	{"BaseAnimating.FindBodygroupByName", BaseAnimatingFindBodygroupByName},
 	{"BaseAnimating.GetAttachment", BaseAnimatingGetAttachment},
@@ -1726,13 +1773,16 @@ bool Sample::SDK_OnLoad(char *error, size_t maxlen, bool late)
 	IGameConfig *g_pGameConf = nullptr;
 	gameconfs->LoadGameConfigFile("animhelpers", &g_pGameConf, error, maxlen);
 	
+	g_pGameConf->GetOffset("CBaseEntity::FireBullets", &CBaseEntityFireBullets);
+	g_pGameConf->GetOffset("CBaseEntity::WorldSpaceCenter", &CBaseEntityWorldSpaceCenter);
+	g_pGameConf->GetMemSig("CBaseEntity::SetAbsOrigin", &CBaseEntitySetAbsOrigin);
+	
 	g_pGameConf->GetOffset("CBaseAnimating::m_pStudioHdr", &m_pStudioHdrOffset);
 	
 	g_pGameConf->GetOffset("CBaseAnimating::StudioFrameAdvance", &CBaseAnimatingStudioFrameAdvance);
 	g_pGameConf->GetOffset("CBaseAnimating::DispatchAnimEvents", &CBaseAnimatingDispatchAnimEvents);
 	g_pGameConf->GetOffset("CBaseAnimating::GetAttachment", &CBaseAnimatingGetAttachment);
 	g_pGameConf->GetOffset("CBaseAnimating::GetBoneTransform", &CBaseAnimatingGetBoneTransform);
-	g_pGameConf->GetOffset("CBaseEntity::FireBullets", &CBaseEntityFireBullets);
 	
 	g_pGameConf->GetMemSig("CBaseAnimating::ResetSequenceInfo", &CBaseAnimatingResetSequenceInfo);
 	g_pGameConf->GetMemSig("CBaseAnimating::LockStudioHdr", &CBaseAnimatingLockStudioHdr);

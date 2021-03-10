@@ -32,7 +32,17 @@ enum struct FireBulletsInfo_t
 	bool m_bUseServerRandomSeed;
 }
 
-methodmap BaseAnimating
+#define FireBulletsInfo_tVar any[]
+
+methodmap BaseEntity
+{
+	public BaseEntity(int entity) { return view_as<BaseEntity>(entity); }
+	public native void FireBullets(FireBulletsInfo_tVar info);
+	public native void WorldSpaceCenter(float center[3]);
+	public native void SetAbsOrigin(float pos[3]);
+}
+
+methodmap BaseAnimating < BaseEntity
 {
 	public BaseAnimating(int entity) { return view_as<BaseAnimating>(entity); }
 	public native int SelectWeightedSequenceEx(Activity activity, int sequence);
@@ -49,8 +59,6 @@ methodmap BaseAnimating
 	public native void StudioFrameAdvance();
 	public native void DispatchAnimEvents();
 	public native void ResetSequenceInfo();
-
-	public native void FireBullets(any[] info);
 
 	public native int LookupAttachment(const char[] pAttachmentName);
 	public native void GetAttachmentEx(int id, float absOrigin[3] = NULL_VECTOR, float absAngles[3] = NULL_VECTOR);
