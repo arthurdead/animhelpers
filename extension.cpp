@@ -2264,6 +2264,9 @@ static cell_t BaseAnimatingGetPoseParameterName(IPluginContext *pContext, const 
 	}
 
 	const char *name = pEntity->GetPoseParameterName(params[2]);
+	if(!name) {
+		name = "";
+	}
 	pContext->StringToLocal(params[3], params[4], name);
 	return 0;
 }
@@ -2276,6 +2279,9 @@ static cell_t BaseAnimatingGetAttachmentName(IPluginContext *pContext, const cel
 	}
 
 	const char *name = pEntity->GetAttachmentName(params[2]);
+	if(!name) {
+		name = "";
+	}
 	pContext->StringToLocal(params[3], params[4], name);
 	return 0;
 }
@@ -2288,6 +2294,9 @@ static cell_t BaseAnimatingGetBoneName(IPluginContext *pContext, const cell_t *p
 	}
 
 	const char *name = pEntity->GetBoneName(params[2]);
+	if(!name) {
+		name = "";
+	}
 	pContext->StringToLocal(params[3], params[4], name);
 	return 0;
 }
@@ -2300,6 +2309,9 @@ static cell_t BaseAnimatingGetBodygroupName(IPluginContext *pContext, const cell
 	}
 
 	const char *name = pEntity->GetBodygroupName(params[2]);
+	if(!name) {
+		name = "";
+	}
 	pContext->StringToLocal(params[3], params[4], name);
 	return 0;
 }
@@ -2312,6 +2324,9 @@ static cell_t BaseAnimatingGetSequenceName(IPluginContext *pContext, const cell_
 	}
 
 	const char *name = pEntity->GetSequenceName(params[2]);
+	if(!name) {
+		name = "";
+	}
 	pContext->StringToLocal(params[3], params[4], name);
 	return 0;
 }
@@ -2324,6 +2339,9 @@ static cell_t BaseAnimatingGetSequenceActivityName(IPluginContext *pContext, con
 	}
 
 	const char *name = pEntity->GetSequenceActivityName(params[2]);
+	if(!name) {
+		name = "";
+	}
 	pContext->StringToLocal(params[3], params[4], name);
 	return 0;
 }
@@ -2336,6 +2354,9 @@ static cell_t BaseFlexGetFlexControllerName(IPluginContext *pContext, const cell
 	}
 
 	const char *name = pEntity->GetFlexControllerName((LocalFlexController_t)params[2]);
+	if(!name) {
+		name = "";
+	}
 	pContext->StringToLocal(params[3], params[4], name);
 	return 0;
 }
@@ -2369,6 +2390,9 @@ static cell_t EventList_IndexForNameNative(IPluginContext *pContext, const cell_
 static cell_t ActivityList_NameForIndexNative(IPluginContext *pContext, const cell_t *params)
 {
 	const char *name = ActivityList_NameForIndex(params[1]);
+	if(!name) {
+		name = "";
+	}
 	pContext->StringToLocal(params[2], params[3], name);
 	return 0;
 }
@@ -2376,6 +2400,9 @@ static cell_t ActivityList_NameForIndexNative(IPluginContext *pContext, const ce
 static cell_t EventList_NameForIndexNative(IPluginContext *pContext, const cell_t *params)
 {
 	const char *name = EventList_NameForIndex(params[1]);
+	if(!name) {
+		name = "";
+	}
 	pContext->StringToLocal(params[2], params[3], name);
 	return 0;
 }

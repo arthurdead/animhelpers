@@ -84,6 +84,16 @@
 #define CL_EVENT_MFOOTSTEP_LEFT_LOUD	6008 // Loud material impact sounds from feet attachments
 #define CL_EVENT_MFOOTSTEP_RIGHT_LOUD	6009
 
+#define TF_OBJ_ENABLEBODYGROUP			6000
+#define TF_OBJ_DISABLEBODYGROUP			6001
+#define TF_OBJ_ENABLEALLBODYGROUPS		6002
+#define TF_OBJ_DISABLEALLBODYGROUPS		6003
+#define TF_OBJ_PLAYBUILDSOUND			6004
+
+#define TF_AE_CIGARETTE_THROW			7000
+#define TF_AE_GUN_SALUTE				7001
+#define TF_AE_PICKAXE_THROW				7002
+
 #define AE_TYPE_SERVER			( 1 << 0 )
 #define AE_TYPE_SCRIPTED		( 1 << 1 )		// see scriptevent.h
 #define AE_TYPE_SHARED			( 1 << 2 )
