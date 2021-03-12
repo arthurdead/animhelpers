@@ -45,17 +45,38 @@ methodmap BaseEntity
 methodmap BaseAnimating < BaseEntity
 {
 	public BaseAnimating(int entity) { return view_as<BaseAnimating>(entity); }
-	public native int SelectWeightedSequenceEx(Activity activity, int sequence);
-	public int SelectWeightedSequence(Activity activity)
-	{
-		int sequence = GetEntProp(view_as<int>(this), Prop_Send, "m_nSequence");
-		return this.SelectWeightedSequenceEx(activity, sequence);
-	}
-	public native int LookupSequence(const char[] name);
+
 	public native Activity LookupActivity(const char[] name);
+	public native int SelectWeightedSequenceEx(Activity activity);
+	public int SelectWeightedSequence(const char[] name)
+	{
+		Activity id = this.LookupActivity(name);
+		if(id != ACT_INVALID) {
+			return this.SelectWeightedSequenceEx(id);
+		} else {
+			return -1;
+		}
+	}
+
 	public native int LookupPoseParameter(const char[] name);
-	public native void SetPoseParameter(int index, float value);
-	public native float GetPoseParameter(int index);
+	public native void SetPoseParameterEx(int index, float value);
+	public native float GetPoseParameterEx(int index);
+	public void SetPoseParameter(const char[] name, float value)
+	{
+		int id = this.LookupPoseParameter(name);
+		if(id != -1) {
+			this.SetPoseParameterEx(id, value);
+		}
+	}
+	public float GetPoseParameter(const char[] name)
+	{
+		int id = this.LookupPoseParameter(name);
+		if(id != -1) {
+			return this.GetPoseParameterEx(id);
+		} else {
+			return 0.0;
+		}
+	}
 	public native void StudioFrameAdvance();
 	public native void DispatchAnimEvents();
 	public native void ResetSequenceInfo();
@@ -79,11 +100,22 @@ methodmap BaseAnimating < BaseEntity
 			this.GetBonePositionEx(id, absOrigin, absAngles);
 		}
 	}
-	public native float SequenceDuration(int sequence);
-	public native int FindBodygroupByName(const char[] name);
-	public native void SetBodygroup(int iGroup, int iValue);
 
-	public void ResetSequence(int sequence)
+	public native int FindBodygroupByName(const char[] name);
+	public native void SetBodygroupEx(int iGroup, int iValue);
+	public void SetBodygroup(const char[] name, int iValue)
+	{
+		int id = this.FindBodygroupByName(name);
+		if(id != -1) {
+			this.SetBodygroupEx(id, iValue);
+		}
+	}
+
+	public native float GetBoneControllerEx(int id);
+	public native void SetBoneControllerEx(int id, float value);
+
+	public native int LookupSequence(const char[] name);
+	public void ResetSequenceEx(int sequence)
 	{
 		int entity = view_as<int>(this);
 		int old = GetEntProp(entity, Prop_Send, "m_nSequence");
@@ -95,20 +127,109 @@ methodmap BaseAnimating < BaseEntity
 			this.ResetSequenceInfo();
 		}
 	}
+	public void ResetSequence(const char[] name)
+	{
+		int sequence = this.LookupSequence(name);
+		if(sequence != -1) {
+			this.ResetSequenceEx(sequence);
+		}
+	}
+	public native float SequenceDurationEx(int sequence);
+	public float SequenceDuration(const char[] name)
+	{
+		int id = this.LookupSequence(name);
+		if(id != -1) {
+			return this.SequenceDurationEx(id);
+		} else {
+			return 0.0;
+		}
+	}
 };
 
 methodmap BaseAnimatingOverlay < BaseAnimating
 {
 	public BaseAnimatingOverlay(int entity) { return view_as<BaseAnimatingOverlay>(entity); }
-	public native int AddGestureSequence(int sequence, bool autokill=true);
-	public native int AddGestureSequenceEx(int sequence, float flDuration, bool autokill=true);
-	public native int AddGesture(Activity activity, bool autokill=true);
-	public native int AddGestureEx(Activity activity, float flDuration, bool autokill=true);
-	public native bool IsPlayingGesture(Activity activity);
-	public native void RestartGesture(Activity activity, bool addifmissing=true, bool autokill=true);
-	public native void RemoveGesture(Activity activity);
+
+	public native int AddGestureSequenceEx1(int sequence, bool autokill=true);
+	public native int AddGestureSequenceEx2(int sequence, float flDuration, bool autokill=true);
+	public native int AddGestureEx1(Activity activity, bool autokill=true);
+	public native int AddGestureEx2(Activity activity, float flDuration, bool autokill=true);
+	public native bool IsPlayingGestureEx(Activity activity);
+	public native void RestartGestureEx(Activity activity, bool addifmissing=true, bool autokill=true);
+	public native void RemoveGestureEx(Activity activity);
+	public native int AddLayeredSequenceEx(int sequence, int iPriority);
+
+	public int AddGestureSequence1(const char[] name, bool autokill=true)
+	{
+		int id = this.LookupSequence(name);
+		if(id != -1) {
+			return this.AddGestureSequenceEx1(id, autokill);
+		} else {
+			return -1;
+		}
+	}
+	public int AddGestureSequence2(const char[] name, float flDuration, bool autokill=true)
+	{
+		int id = this.LookupSequence(name);
+		if(id != -1) {
+			return this.AddGestureSequenceEx2(id, flDuration, autokill);
+		} else {
+			return -1;
+		}
+	}
+	public int AddLayeredSequence(const char[] name, int iPriority)
+	{
+		int id = this.LookupSequence(name);
+		if(id != -1) {
+			return this.AddLayeredSequenceEx(id, iPriority);
+		} else {
+			return -1;
+		}
+	}
+
+	public int AddGesture1(const char[] name, bool autokill=true)
+	{
+		Activity id = this.LookupActivity(name);
+		if(id != ACT_INVALID) {
+			return this.AddGestureEx1(id, autokill);
+		} else {
+			return -1;
+		}
+	}
+	public int AddGesture2(const char[] name, float flDuration, bool autokill=true)
+	{
+		Activity id = this.LookupActivity(name);
+		if(id != ACT_INVALID) {
+			return this.AddGestureEx2(id, flDuration, autokill);
+		} else {
+			return -1;
+		}
+	}
+	public bool IsPlayingGesture(const char[] name)
+	{
+		Activity id = this.LookupActivity(name);
+		if(id != ACT_INVALID) {
+			return this.IsPlayingGestureEx(id);
+		} else {
+			return false;
+		}
+	}
+	public void RemoveGesture(const char[] name)
+	{
+		Activity id = this.LookupActivity(name);
+		if(id != ACT_INVALID) {
+			this.RemoveGestureEx(id);
+		}
+	}
+	public void RestartGesture(const char[] name, bool addifmissing=true, bool autokill=true)
+	{
+		Activity id = this.LookupActivity(name);
+		if(id != ACT_INVALID) {
+			this.RestartGestureEx(id, addifmissing, autokill);
+		}
+	}
+
 	public native void RemoveAllGestures();
-	public native int AddLayeredSequence(int sequence, int iPriority);
 	public native void SetLayerPriority(int iLayer, int iPriority);
 	public native bool IsValidLayer(int iLayer);
 	public native void SetLayerDuration(int iLayer, float flDuration);
@@ -135,6 +256,33 @@ methodmap BaseAnimatingOverlay < BaseAnimating
 	public native bool HasActiveLayer();
 	public native int AllocateLayer(int iPriority=0);
 	public static native int MaxOverlays()
+};
+
+#define LocalFlexController_t int
+
+methodmap BaseFlex < BaseAnimatingOverlay
+{
+	public BaseFlex(int entity) { return view_as<BaseFlex>(entity); }
+
+	public native LocalFlexController_t FindFlexController(const char[] name);
+	public native void SetFlexWeightEx(LocalFlexController_t id, float value);
+	public native float GetFlexWeightEx(LocalFlexController_t id);
+	public void SetFlexWeight(const char[] name, float value)
+	{
+		LocalFlexController_t id = this.FindFlexController(name);
+		if(id != -1) {
+			this.SetFlexWeightEx(id, value);
+		}
+	}
+	public float GetFlexWeight(const char[] name)
+	{
+		LocalFlexController_t id = this.FindFlexController(name);
+		if(id != -1) {
+			return this.GetFlexWeightEx(id);
+		} else {
+			return 0.0;
+		}
+	}
 };
 
 #if !defined REQUIRE_EXTENSIONS

@@ -67,6 +67,8 @@ int m_nSequenceOffset = -1;
 int m_flPoseParameterOffset = -1;
 int m_AnimOverlayOffset = -1;
 int m_nBodyOffset = -1;
+int m_flEncodedControllerOffset = -1;
+int m_flexWeightOffset = -1;
 
 int CBaseAnimatingStudioFrameAdvance = -1;
 int CBaseAnimatingDispatchAnimEvents = -1;
@@ -79,22 +81,12 @@ void *CBaseAnimatingResetSequenceInfo = nullptr;
 void *CBaseAnimatingLockStudioHdr = nullptr;
 void *CBaseEntitySetAbsOrigin = nullptr;
 
-template <typename T>
-T void_to_func(void *ptr)
-{
-	union { T f; void *p; };
-	p = ptr;
-	return f;
-}
-
 template <typename R, typename T, typename ...Args>
-R call_vfunc(T *pThisPtr, size_t offset, Args ...args)
+R call_mfunc(T *pThisPtr, void *offset, Args ...args)
 {
 	class VEmptyClass {};
 	
 	void **this_ptr = *reinterpret_cast<void ***>(&pThisPtr);
-	void **vtable = *reinterpret_cast<void ***>(pThisPtr);
-	void *vfunc = vtable[offset];
 	
 	union
 	{
@@ -102,7 +94,7 @@ R call_vfunc(T *pThisPtr, size_t offset, Args ...args)
 #ifndef PLATFORM_POSIX
 		void *addr;
 	} u;
-	u.addr = vfunc;
+	u.addr = offset;
 #else
 		struct  
 		{
@@ -110,11 +102,20 @@ R call_vfunc(T *pThisPtr, size_t offset, Args ...args)
 			intptr_t adjustor;
 		} s;
 	} u;
-	u.s.addr = vfunc;
+	u.s.addr = offset;
 	u.s.adjustor = 0;
 #endif
 	
 	return (R)(reinterpret_cast<VEmptyClass *>(this_ptr)->*u.mfpnew)(args...);
+}
+
+template <typename R, typename T, typename ...Args>
+R call_vfunc(T *pThisPtr, size_t offset, Args ...args)
+{
+	void **vtable = *reinterpret_cast<void ***>(pThisPtr);
+	void *vfunc = vtable[offset];
+	
+	return call_mfunc<R, T, Args...>(pThisPtr, vfunc, args...);
 }
 
 extern "C"
@@ -200,7 +201,7 @@ public:
 	
 	void SetAbsOrigin( const Vector& origin )
 	{
-		(this->*void_to_func<void(CBaseEntity::*)(const Vector&)>(CBaseEntitySetAbsOrigin))(origin);
+		call_mfunc<void, CBaseEntity, const Vector &>(this, CBaseEntitySetAbsOrigin, origin);
 	}
 	
 	const Vector &WorldSpaceCenter()
@@ -242,6 +243,14 @@ public:
 #undef ListFromString
 #include <collisionutils.cpp>
 
+void SetEdictStateChanged(CBaseEntity *pEntity, int offset)
+{
+	IServerNetworkable *pNet = pEntity->GetNetworkable();
+	edict_t *edict = pNet->GetEdict();
+	
+	gamehelpers->SetEdictStateChanged(edict, offset);
+}
+
 class CBaseAnimating : public CBaseEntity
 {
 public:
@@ -251,7 +260,8 @@ public:
 		
 		if ( !m_pStudioHdr && GetModel() )
 		{
-			(this->*void_to_func<void(CBaseAnimating::*)()>(CBaseAnimatingLockStudioHdr))();
+			call_mfunc<void>(this, CBaseAnimatingLockStudioHdr);
+			
 			m_pStudioHdr = *(CStudioHdr **)((unsigned char *)this + m_pStudioHdrOffset);
 		}
 		
@@ -266,6 +276,11 @@ public:
 	float *GetPoseParameterArray()
 	{
 		return *(float **)((unsigned char *)this + m_flPoseParameterOffset);
+	}
+	
+	float *GetEncodedControllerArray()
+	{
+		return *(float **)((unsigned char *)this + m_flEncodedControllerOffset);
 	}
 	
 	void StudioFrameAdvance()
@@ -292,7 +307,7 @@ public:
 	
 	void ResetSequenceInfo()
 	{
-		(this->*void_to_func<void(CBaseAnimating::*)()>(CBaseAnimatingResetSequenceInfo))();
+		call_mfunc<void>(this, CBaseAnimatingResetSequenceInfo);
 	}
 	
 	int GetBody()
@@ -303,6 +318,7 @@ public:
 	void SetBody(int value)
 	{
 		*(int *)((unsigned char *)this + m_nBodyOffset) = value;
+		SetEdictStateChanged(this, m_nBodyOffset);
 	}
 	
 	bool GetAttachment( const char *szName, Vector &absOrigin, QAngle &absAngles )
@@ -333,7 +349,35 @@ public:
 	int LookupPoseParameter(const char *name);
 	float SequenceDuration(int sequence);
 	int GetSequenceFlags(int sequence);
+	
+	void SetBoneController ( int iController, float flValue );
+	float GetBoneController ( int iController );
 };
+
+void CBaseAnimating::SetBoneController ( int iController, float flValue )
+{
+	CStudioHdr *pmodel = (CStudioHdr*)GetModelPtr();
+	if (!pmodel)
+	{
+		return;
+	}
+
+	float newValue;
+	float retVal = Studio_SetController( pmodel, iController, flValue, newValue );
+	GetEncodedControllerArray()[iController] = newValue;
+	SetEdictStateChanged(this, m_flEncodedControllerOffset + (iController * sizeof(float)));
+}
+
+float CBaseAnimating::GetBoneController ( int iController )
+{
+	CStudioHdr *pmodel = (CStudioHdr*)GetModelPtr();
+	if (!pmodel)
+	{
+		return 0.0;
+	}
+	
+	return Studio_GetController( pmodel, iController, GetEncodedControllerArray()[iController] );
+}
 
 void CBaseAnimating::GetBonePosition ( int iBone, Vector &origin, QAngle &angles )
 {
@@ -1062,6 +1106,7 @@ void CBaseAnimating::SetPoseParameter(int index, float value)
 	float flNewValue = 0.0f;
 	Studio_SetPoseParameter(pStudioHdr, index, value, flNewValue);
 	GetPoseParameterArray()[index] = flNewValue;
+	SetEdictStateChanged(this, m_flPoseParameterOffset + (index * sizeof(float)));
 }
 
 int CBaseAnimating::LookupPoseParameter(const char *name)
@@ -1147,6 +1192,95 @@ int CBaseAnimating::LookupActivity(const char *name)
 	return ::LookupActivity(pStudioHdr, name);
 }
 
+class CBaseFlex : public CBaseAnimatingOverlay
+{
+public:
+	LocalFlexController_t FindFlexController( const char *szName );
+	LocalFlexController_t GetNumFlexControllers( void );
+	const char *GetFlexControllerName( LocalFlexController_t iFlexController );
+	void SetFlexWeight( LocalFlexController_t index, float value );
+	float GetFlexWeight( LocalFlexController_t index );
+	
+	float *GetFlexWeightArray()
+	{
+		return *(float **)((unsigned char *)this + m_flexWeightOffset);
+	}
+};
+
+LocalFlexController_t CBaseFlex::GetNumFlexControllers( void )
+{
+	CStudioHdr *pstudiohdr = GetModelPtr( );
+	if (! pstudiohdr)
+		return LocalFlexController_t(0);
+
+	return pstudiohdr->numflexcontrollers();
+}
+
+const char *CBaseFlex::GetFlexControllerName( LocalFlexController_t iFlexController )
+{
+	CStudioHdr *pstudiohdr = GetModelPtr( );
+	if (! pstudiohdr)
+		return 0;
+
+	mstudioflexcontroller_t *pflexcontroller = pstudiohdr->pFlexcontroller( iFlexController );
+
+	return pflexcontroller->pszName( );
+}
+
+LocalFlexController_t CBaseFlex::FindFlexController( const char *szName )
+{
+	for (LocalFlexController_t i = LocalFlexController_t(0); i < GetNumFlexControllers(); i++)
+	{
+		if (stricmp( GetFlexControllerName( i ), szName ) == 0)
+		{
+			return i;
+		}
+	}
+
+	return LocalFlexController_t(0);
+}
+
+void CBaseFlex::SetFlexWeight( LocalFlexController_t index, float value )
+{
+	if (index >= 0 && index < GetNumFlexControllers())
+	{
+		CStudioHdr *pstudiohdr = GetModelPtr( );
+		if (! pstudiohdr)
+			return;
+
+		mstudioflexcontroller_t *pflexcontroller = pstudiohdr->pFlexcontroller( index );
+
+		if (pflexcontroller->max != pflexcontroller->min)
+		{
+			value = (value - pflexcontroller->min) / (pflexcontroller->max - pflexcontroller->min);
+			value = clamp( value, 0.0f, 1.0f );
+		}
+
+		GetFlexWeightArray()[index] = value;
+		SetEdictStateChanged(this, m_flexWeightOffset + (index * sizeof(float)));
+	}
+}
+
+float CBaseFlex::GetFlexWeight( LocalFlexController_t index )
+{
+	if (index >= 0 && index < GetNumFlexControllers())
+	{
+		CStudioHdr *pstudiohdr = GetModelPtr( );
+		if (! pstudiohdr)
+			return 0;
+
+		mstudioflexcontroller_t *pflexcontroller = pstudiohdr->pFlexcontroller( index );
+
+		if (pflexcontroller->max != pflexcontroller->min)
+		{
+			return GetFlexWeightArray()[index] * (pflexcontroller->max - pflexcontroller->min) + pflexcontroller->min;
+		}
+				
+		return GetFlexWeightArray()[index];
+	}
+	return 0.0;
+}
+
 static cell_t BaseAnimatingSelectWeightedSequenceEx(IPluginContext *pContext, const cell_t *params)
 {
 	CBaseAnimating *pEntity = (CBaseAnimating *)gamehelpers->ReferenceToEntity(params[1]);
@@ -1154,7 +1288,7 @@ static cell_t BaseAnimatingSelectWeightedSequenceEx(IPluginContext *pContext, co
 		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
 	}
 
-	return pEntity->SelectWeightedSequence((Activity)params[2], params[3]);
+	return pEntity->SelectWeightedSequence((Activity)params[2]);
 }
 
 static cell_t BaseAnimatingLookupSequence(IPluginContext *pContext, const cell_t *params)
@@ -1810,6 +1944,61 @@ static cell_t BaseAnimatingSetBodygroup(IPluginContext *pContext, const cell_t *
 	return 0;
 }
 
+static cell_t BaseAnimatingGetBoneControllerEx(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseAnimating *pEntity = (CBaseAnimating *)gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+	
+	return sp_ftoc(pEntity->GetBoneController(params[2]));
+}
+
+static cell_t BaseAnimatingSetBoneControllerEx(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseAnimating *pEntity = (CBaseAnimating *)gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+	
+	pEntity->SetBoneController(params[2], sp_ctof(params[3]));
+	return 0;
+}
+
+static cell_t BaseFlexFindFlexController(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseFlex *pEntity = (CBaseFlex *)gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+
+	char *name = nullptr;
+	pContext->LocalToString(params[2], &name);
+
+	return (cell_t)pEntity->FindFlexController(name);
+}
+
+static cell_t BaseFlexSetFlexWeight(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseFlex *pEntity = (CBaseFlex *)gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+
+	pEntity->SetFlexWeight((LocalFlexController_t)params[2], sp_ctof(params[3]));
+	return 0;
+}
+
+static cell_t BaseFlexGetFlexWeight(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseFlex *pEntity = (CBaseFlex *)gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+	
+	return sp_ftoc(pEntity->GetFlexWeight((LocalFlexController_t)params[2]));
+}
+
 static const sp_nativeinfo_t g_sNativesInfo[] =
 {
 	{"BaseEntity.FireBullets", BaseEntityFireBullets},
@@ -1819,27 +2008,32 @@ static const sp_nativeinfo_t g_sNativesInfo[] =
 	{"BaseAnimating.LookupSequence", BaseAnimatingLookupSequence},
 	{"BaseAnimating.LookupActivity", BaseAnimatingLookupActivity},
 	{"BaseAnimating.LookupPoseParameter", BaseAnimatingLookupPoseParameter},
-	{"BaseAnimating.SetPoseParameter", BaseAnimatingSetPoseParameter},
-	{"BaseAnimating.GetPoseParameter", BaseAnimatingGetPoseParameter},
+	{"BaseAnimating.SetPoseParameterEx", BaseAnimatingSetPoseParameter},
+	{"BaseAnimating.GetPoseParameterEx", BaseAnimatingGetPoseParameter},
 	{"BaseAnimating.StudioFrameAdvance", BaseAnimatingStudioFrameAdvance},
 	{"BaseAnimating.DispatchAnimEvents", BaseAnimatingDispatchAnimEvents},
 	{"BaseAnimating.ResetSequenceInfo", BaseAnimatingResetSequenceInfo},
 	{"BaseAnimating.LookupAttachment", BaseAnimatingLookupAttachment},
 	{"BaseAnimating.FindBodygroupByName", BaseAnimatingFindBodygroupByName},
 	{"BaseAnimating.GetAttachmentEx", BaseAnimatingGetAttachmentEx},
-	{"BaseAnimating.SetBodygroup", BaseAnimatingSetBodygroup},
+	{"BaseAnimating.SetBodygroupEx", BaseAnimatingSetBodygroup},
 	{"BaseAnimating.LookupBone", BaseAnimatingLookupBone},
 	{"BaseAnimating.GetBonePositionEx", BaseAnimatingGetBonePositionEx},
-	{"BaseAnimating.SequenceDuration", BaseAnimatingSequenceDuration},
-	{"BaseAnimatingOverlay.AddGestureSequence", BaseAnimatingOverlayAddGestureSequence},
-	{"BaseAnimatingOverlay.AddGestureSequenceEx", BaseAnimatingOverlayAddGestureSequenceEx},
-	{"BaseAnimatingOverlay.AddGesture", BaseAnimatingOverlayAddGesture},
-	{"BaseAnimatingOverlay.AddGestureEx", BaseAnimatingOverlayAddGestureEx},
-	{"BaseAnimatingOverlay.IsPlayingGesture", BaseAnimatingOverlayIsPlayingGesture},
-	{"BaseAnimatingOverlay.RestartGesture", BaseAnimatingOverlayRestartGesture},
-	{"BaseAnimatingOverlay.RemoveGesture", BaseAnimatingOverlayRemoveGesture},
+	{"BaseAnimating.SequenceDurationEx", BaseAnimatingSequenceDuration},
+	{"BaseAnimating.GetBoneControllerEx", BaseAnimatingGetBoneControllerEx},
+	{"BaseAnimating.SetBoneControllerEx", BaseAnimatingSetBoneControllerEx},
+	{"BaseFlex.FindFlexController", BaseFlexFindFlexController},
+	{"BaseFlex.SetFlexWeightEx", BaseFlexSetFlexWeight},
+	{"BaseFlex.GetFlexWeightEx", BaseFlexGetFlexWeight},
+	{"BaseAnimatingOverlay.AddGestureSequenceEx1", BaseAnimatingOverlayAddGestureSequence},
+	{"BaseAnimatingOverlay.AddGestureSequenceEx2", BaseAnimatingOverlayAddGestureSequenceEx},
+	{"BaseAnimatingOverlay.AddGestureEx1", BaseAnimatingOverlayAddGesture},
+	{"BaseAnimatingOverlay.AddGestureEx2", BaseAnimatingOverlayAddGestureEx},
+	{"BaseAnimatingOverlay.IsPlayingGestureEx", BaseAnimatingOverlayIsPlayingGesture},
+	{"BaseAnimatingOverlay.RestartGestureEx", BaseAnimatingOverlayRestartGesture},
+	{"BaseAnimatingOverlay.RemoveGestureEx", BaseAnimatingOverlayRemoveGesture},
+	{"BaseAnimatingOverlay.AddLayeredSequenceEx", BaseAnimatingOverlayAddLayeredSequence},
 	{"BaseAnimatingOverlay.RemoveAllGestures", BaseAnimatingOverlayRemoveAllGestures},
-	{"BaseAnimatingOverlay.AddLayeredSequence", BaseAnimatingOverlayAddLayeredSequence},
 	{"BaseAnimatingOverlay.SetLayerPriority", BaseAnimatingOverlaySetLayerPriority},
 	{"BaseAnimatingOverlay.IsValidLayer", BaseAnimatingOverlayIsValidLayer},
 	{"BaseAnimatingOverlay.SetLayerDuration", BaseAnimatingOverlaySetLayerDuration},
@@ -1922,6 +2116,12 @@ bool Sample::SDK_OnLoad(char *error, size_t maxlen, bool late)
 	
 	gamehelpers->FindSendPropInfo("CBaseAnimating", "m_flPoseParameter", &info);
 	m_flPoseParameterOffset = info.actual_offset;
+	
+	gamehelpers->FindSendPropInfo("CBaseAnimating", "m_flEncodedController", &info);
+	m_flEncodedControllerOffset = info.actual_offset;
+	
+	gamehelpers->FindSendPropInfo("CBaseFlex", "m_flexWeight", &info);
+	m_flexWeightOffset = info.actual_offset;
 	
 	gamehelpers->FindSendPropInfo("CBaseAnimating", "m_nBody", &info);
 	m_nBodyOffset = info.actual_offset;
