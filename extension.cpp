@@ -1684,6 +1684,132 @@ static cell_t BaseEntityWorldSpaceCenter(IPluginContext *pContext, const cell_t 
 	return 0;
 }
 
+static cell_t BaseAnimatingLookupAttachment(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseAnimating *pEntity = (CBaseAnimating *)gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+
+	char *name = nullptr;
+	pContext->LocalToString(params[2], &name);
+
+	return pEntity->LookupAttachment(name);
+}
+
+static cell_t BaseAnimatingFindBodygroupByName(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseAnimating *pEntity = (CBaseAnimating *)gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+
+	char *name = nullptr;
+	pContext->LocalToString(params[2], &name);
+
+	return pEntity->FindBodygroupByName(name);
+}
+
+static cell_t BaseAnimatingLookupBone(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseAnimating *pEntity = (CBaseAnimating *)gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+
+	char *name = nullptr;
+	pContext->LocalToString(params[2], &name);
+
+	return pEntity->LookupBone(name);
+}
+
+static cell_t BaseAnimatingGetAttachmentEx(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseAnimating *pEntity = (CBaseAnimating *)gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+
+	cell_t *pNullVec = pContext->GetNullRef(SP_NULL_VECTOR);
+	
+	Vector origin{};
+	QAngle angles{};
+	pEntity->GetAttachment(params[2], origin, angles);
+	
+	cell_t *addr = nullptr;
+	pContext->LocalToPhysAddr(params[3], &addr);
+	
+	if(addr != pNullVec) {
+		addr[0] = sp_ftoc(origin.x);
+		addr[1] = sp_ftoc(origin.y);
+		addr[2] = sp_ftoc(origin.z);
+	}
+	
+	pContext->LocalToPhysAddr(params[4], &addr);
+	
+	if(addr != pNullVec) {
+		addr[0] = sp_ftoc(angles.x);
+		addr[1] = sp_ftoc(angles.y);
+		addr[2] = sp_ftoc(angles.z);
+	}
+	
+	return 0;
+}
+
+static cell_t BaseAnimatingGetBonePositionEx(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseAnimating *pEntity = (CBaseAnimating *)gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+
+	cell_t *pNullVec = pContext->GetNullRef(SP_NULL_VECTOR);
+	
+	Vector origin{};
+	QAngle angles{};
+	pEntity->GetBonePosition(params[2], origin, angles);
+	
+	cell_t *addr = nullptr;
+	pContext->LocalToPhysAddr(params[3], &addr);
+	
+	if(addr != pNullVec) {
+		addr[0] = sp_ftoc(origin.x);
+		addr[1] = sp_ftoc(origin.y);
+		addr[2] = sp_ftoc(origin.z);
+	}
+	
+	pContext->LocalToPhysAddr(params[4], &addr);
+	
+	if(addr != pNullVec) {
+		addr[0] = sp_ftoc(angles.x);
+		addr[1] = sp_ftoc(angles.y);
+		addr[2] = sp_ftoc(angles.z);
+	}
+	
+	return 0;
+}
+
+static cell_t BaseAnimatingSequenceDuration(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseAnimating *pEntity = (CBaseAnimating *)gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+	
+	return sp_ftoc(pEntity->SequenceDuration(params[2]));
+}
+
+static cell_t BaseAnimatingSetBodygroup(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseAnimating *pEntity = (CBaseAnimating *)gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+	
+	pEntity->SetBodygroup(params[2], params[3]);
+	return 0;
+}
+
 static const sp_nativeinfo_t g_sNativesInfo[] =
 {
 	{"BaseEntity.FireBullets", BaseEntityFireBullets},
@@ -1698,15 +1824,13 @@ static const sp_nativeinfo_t g_sNativesInfo[] =
 	{"BaseAnimating.StudioFrameAdvance", BaseAnimatingStudioFrameAdvance},
 	{"BaseAnimating.DispatchAnimEvents", BaseAnimatingDispatchAnimEvents},
 	{"BaseAnimating.ResetSequenceInfo", BaseAnimatingResetSequenceInfo},
-	/*{"BaseAnimating.LookupAttachment", BaseAnimatingLookupAttachment},
+	{"BaseAnimating.LookupAttachment", BaseAnimatingLookupAttachment},
 	{"BaseAnimating.FindBodygroupByName", BaseAnimatingFindBodygroupByName},
-	{"BaseAnimating.GetAttachment", BaseAnimatingGetAttachment},
 	{"BaseAnimating.GetAttachmentEx", BaseAnimatingGetAttachmentEx},
 	{"BaseAnimating.SetBodygroup", BaseAnimatingSetBodygroup},
 	{"BaseAnimating.LookupBone", BaseAnimatingLookupBone},
-	{"BaseAnimating.GetBonePosition", BaseAnimatingGetBonePosition},
 	{"BaseAnimating.GetBonePositionEx", BaseAnimatingGetBonePositionEx},
-	{"BaseAnimating.SequenceDuration", BaseAnimatingSequenceDuration},*/
+	{"BaseAnimating.SequenceDuration", BaseAnimatingSequenceDuration},
 	{"BaseAnimatingOverlay.AddGestureSequence", BaseAnimatingOverlayAddGestureSequence},
 	{"BaseAnimatingOverlay.AddGestureSequenceEx", BaseAnimatingOverlayAddGestureSequenceEx},
 	{"BaseAnimatingOverlay.AddGesture", BaseAnimatingOverlayAddGesture},
