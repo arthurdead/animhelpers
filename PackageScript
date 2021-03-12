@@ -30,7 +30,7 @@ def CopyFiles(src, dest, files):
 
 # Include files 
 CopyFiles('sourcemod/scripting/include', 'addons/sourcemod/scripting/include',
-  [ 'animhelpers.inc', 'animhelpers_activity.inc' ]
+  [ 'animhelpers.inc', 'animhelpers_activity.inc', 'animhelpers_eventlist.inc' ]
 )
 
 # GameData files

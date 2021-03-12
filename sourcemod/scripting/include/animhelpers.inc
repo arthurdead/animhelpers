@@ -4,6 +4,7 @@
 #define animhelpers_included
 
 #include <animhelpers_activity>
+#include <animhelpers_eventlist>
 
 enum FireBulletsFlags_t
 {
@@ -48,6 +49,7 @@ methodmap BaseAnimating < BaseEntity
 
 	public native Activity LookupActivity(const char[] name);
 	public native int SelectWeightedSequenceEx(Activity activity);
+	public native int SelectHeaviestSequenceEx(Activity activity);
 	public int SelectWeightedSequence(const char[] name)
 	{
 		Activity id = this.LookupActivity(name);
@@ -57,7 +59,18 @@ methodmap BaseAnimating < BaseEntity
 			return -1;
 		}
 	}
+	public int SelectHeaviestSequence(const char[] name)
+	{
+		Activity id = this.LookupActivity(name);
+		if(id != ACT_INVALID) {
+			return this.SelectHeaviestSequenceEx(id);
+		} else {
+			return -1;
+		}
+	}
 
+	public native int GetNumPoseParameters();
+	public native void GetPoseParameterName(int id, char[] name, int len);
 	public native int LookupPoseParameter(const char[] name);
 	public native void SetPoseParameterEx(int index, float value);
 	public native float GetPoseParameterEx(int index);
@@ -81,6 +94,8 @@ methodmap BaseAnimating < BaseEntity
 	public native void DispatchAnimEvents();
 	public native void ResetSequenceInfo();
 
+	public native int GetNumAttachments();
+	public native void GetAttachmentName(int id, char[] name, int len);
 	public native int LookupAttachment(const char[] pAttachmentName);
 	public native void GetAttachmentEx(int id, float absOrigin[3] = NULL_VECTOR, float absAngles[3] = NULL_VECTOR);
 	public void GetAttachment(const char[] szName, float absOrigin[3] = NULL_VECTOR, float absAngles[3] = NULL_VECTOR)
@@ -91,6 +106,8 @@ methodmap BaseAnimating < BaseEntity
 		}
 	}
 
+	public native int GetNumBones();
+	public native void GetBoneName(int id, char[] name, int len);
 	public native int LookupBone(const char[] name);
 	public native void GetBonePositionEx(int id, float absOrigin[3] = NULL_VECTOR, float absAngles[3] = NULL_VECTOR);
 	public void GetBonePosition(const char[] szName, float absOrigin[3] = NULL_VECTOR, float absAngles[3] = NULL_VECTOR)
@@ -101,6 +118,8 @@ methodmap BaseAnimating < BaseEntity
 		}
 	}
 
+	public native int GetNumBodygroups();
+	public native void GetBodygroupName(int id, char[] name, int len);
 	public native int FindBodygroupByName(const char[] name);
 	public native void SetBodygroupEx(int iGroup, int iValue);
 	public void SetBodygroup(const char[] name, int iValue)
@@ -111,9 +130,13 @@ methodmap BaseAnimating < BaseEntity
 		}
 	}
 
+	public native int GetNumBoneControllers();
 	public native float GetBoneControllerEx(int id);
 	public native void SetBoneControllerEx(int id, float value);
 
+	public native int GetNumSequences();
+	public native void GetSequenceName(int id, char[] name, int len);
+	public native void GetSequenceActivityName(int id, char[] name, int len);
 	public native int LookupSequence(const char[] name);
 	public void ResetSequenceEx(int sequence)
 	{
@@ -258,25 +281,25 @@ methodmap BaseAnimatingOverlay < BaseAnimating
 	public static native int MaxOverlays()
 };
 
-#define LocalFlexController_t int
-
 methodmap BaseFlex < BaseAnimatingOverlay
 {
 	public BaseFlex(int entity) { return view_as<BaseFlex>(entity); }
 
-	public native LocalFlexController_t FindFlexController(const char[] name);
-	public native void SetFlexWeightEx(LocalFlexController_t id, float value);
-	public native float GetFlexWeightEx(LocalFlexController_t id);
+	public native int GetNumFlexControllers();
+	public native void GetFlexControllerName(int id, char[] name, int len);
+	public native int FindFlexController(const char[] name);
+	public native void SetFlexWeightEx(int id, float value);
+	public native float GetFlexWeightEx(int id);
 	public void SetFlexWeight(const char[] name, float value)
 	{
-		LocalFlexController_t id = this.FindFlexController(name);
+		int id = this.FindFlexController(name);
 		if(id != -1) {
 			this.SetFlexWeightEx(id, value);
 		}
 	}
 	public float GetFlexWeight(const char[] name)
 	{
-		LocalFlexController_t id = this.FindFlexController(name);
+		int id = this.FindFlexController(name);
 		if(id != -1) {
 			return this.GetFlexWeightEx(id);
 		} else {
@@ -284,6 +307,12 @@ methodmap BaseFlex < BaseAnimatingOverlay
 		}
 	}
 };
+
+native Activity ActivityList_IndexForName(const char[] name);
+native void ActivityList_NameForIndex(int id, char[] name, int len);
+
+native int EventList_IndexForName(const char[] name);
+native void EventList_NameForIndex(int id, char[] name, int len);
 
 #if !defined REQUIRE_EXTENSIONS
 public void __ext_animhelpers_SetNTVOptional()

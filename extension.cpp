@@ -352,7 +352,194 @@ public:
 	
 	void SetBoneController ( int iController, float flValue );
 	float GetBoneController ( int iController );
+	
+	int SelectHeaviestSequence ( Activity activity );
+	
+	int GetNumSequences();
+	int GetNumPoseParameters();
+	int GetNumAttachments();
+	int GetNumBones();
+	int GetNumBodygroups();
+	int GetNumBoneControllers();
+	
+	const char *GetPoseParameterName(int id);
+	const char *GetAttachmentName(int id);
+	const char *GetBoneName(int id);
+	const char *GetBodygroupName(int id);
+	const char *GetSequenceName(int id);
+	const char *GetSequenceActivityName(int id);
 };
+
+const char *CBaseAnimating::GetSequenceActivityName(int id)
+{
+	CStudioHdr *pStudioHdr = GetModelPtr( );
+	if (!pStudioHdr)
+	{
+		return "";
+	}
+
+	if (id < 0 || id >= pStudioHdr->GetNumSeq())
+	{
+		return "";
+	}
+	
+	return pStudioHdr->pSeqdesc( id ).pszActivityName();
+}
+
+const char *CBaseAnimating::GetSequenceName(int id)
+{
+	CStudioHdr *pStudioHdr = GetModelPtr( );
+	if (!pStudioHdr)
+	{
+		return "";
+	}
+
+	if (id < 0 || id >= pStudioHdr->GetNumSeq())
+	{
+		return "";
+	}
+	
+	return pStudioHdr->pSeqdesc( id ).pszLabel();
+}
+
+int CBaseAnimating::GetNumBoneControllers()
+{
+	CStudioHdr *pmodel = (CStudioHdr*)GetModelPtr();
+	if (!pmodel)
+	{
+		return 0;
+	}
+	
+	return pmodel->numbonecontrollers();
+}
+
+const char *CBaseAnimating::GetBodygroupName(int id)
+{
+	CStudioHdr *pStudioHdr = GetModelPtr( );
+	if (!pStudioHdr)
+	{
+		return "";
+	}
+
+	if (id < 0 || id >= pStudioHdr->numbodyparts())
+	{
+		return "";
+	}
+	
+	return pStudioHdr->pBodypart( id )->pszName();
+}
+
+int CBaseAnimating::GetNumBodygroups()
+{
+	CStudioHdr *pmodel = (CStudioHdr*)GetModelPtr();
+	if (!pmodel)
+	{
+		return 0;
+	}
+	
+	return pmodel->numbodyparts();
+}
+
+const char *CBaseAnimating::GetBoneName(int id)
+{
+	CStudioHdr *pStudioHdr = GetModelPtr( );
+	if (!pStudioHdr)
+	{
+		return "";
+	}
+
+	if (id < 0 || id >= pStudioHdr->numbones())
+	{
+		return "";
+	}
+	
+	const byte *pBoneTable = pStudioHdr->GetBoneTableSortedByName();
+	mstudiobone_t *pbones = pStudioHdr->pBone( 0 );
+	int mid = id >> 1;
+	
+	return pbones[pBoneTable[mid]].pszName();
+}
+
+int CBaseAnimating::GetNumBones()
+{
+	CStudioHdr *pmodel = (CStudioHdr*)GetModelPtr();
+	if (!pmodel)
+	{
+		return 0;
+	}
+	
+	return pmodel->numbones();
+}
+
+int CBaseAnimating::GetNumAttachments()
+{
+	CStudioHdr *pmodel = (CStudioHdr*)GetModelPtr();
+	if (!pmodel)
+	{
+		return 0;
+	}
+	
+	return pmodel->GetNumAttachments();
+}
+
+const char *CBaseAnimating::GetAttachmentName(int id)
+{
+	CStudioHdr *pStudioHdr = GetModelPtr( );
+	if (!pStudioHdr)
+	{
+		return "";
+	}
+
+	if (id < 0 || id >= pStudioHdr->GetNumAttachments())
+	{
+		return "";
+	}
+	
+	return pStudioHdr->pAttachment( id ).pszName();
+}
+
+const char *CBaseAnimating::GetPoseParameterName(int id)
+{
+	CStudioHdr *pStudioHdr = GetModelPtr( );
+	if (!pStudioHdr)
+	{
+		return "";
+	}
+
+	if (id < 0 || id >= pStudioHdr->GetNumPoseParameters())
+	{
+		return "";
+	}
+	
+	return pStudioHdr->pPoseParameter( id ).pszName();
+}
+
+int CBaseAnimating::SelectHeaviestSequence ( Activity activity )
+{
+	return ::SelectHeaviestSequence( GetModelPtr(), activity );
+}
+
+int CBaseAnimating::GetNumPoseParameters()
+{
+	CStudioHdr *pmodel = (CStudioHdr*)GetModelPtr();
+	if (!pmodel)
+	{
+		return 0;
+	}
+	
+	return pmodel->GetNumPoseParameters();
+}
+
+int CBaseAnimating::GetNumSequences()
+{
+	CStudioHdr *pmodel = (CStudioHdr*)GetModelPtr();
+	if (!pmodel)
+	{
+		return 0;
+	}
+	
+	return pmodel->GetNumSeq();
+}
 
 void CBaseAnimating::SetBoneController ( int iController, float flValue )
 {
@@ -1220,7 +1407,7 @@ const char *CBaseFlex::GetFlexControllerName( LocalFlexController_t iFlexControl
 {
 	CStudioHdr *pstudiohdr = GetModelPtr( );
 	if (! pstudiohdr)
-		return 0;
+		return "";
 
 	mstudioflexcontroller_t *pflexcontroller = pstudiohdr->pFlexcontroller( iFlexController );
 
@@ -1237,7 +1424,7 @@ LocalFlexController_t CBaseFlex::FindFlexController( const char *szName )
 		}
 	}
 
-	return LocalFlexController_t(0);
+	return LocalFlexController_t(-1);
 }
 
 void CBaseFlex::SetFlexWeight( LocalFlexController_t index, float value )
@@ -1267,7 +1454,7 @@ float CBaseFlex::GetFlexWeight( LocalFlexController_t index )
 	{
 		CStudioHdr *pstudiohdr = GetModelPtr( );
 		if (! pstudiohdr)
-			return 0;
+			return 0.0f;
 
 		mstudioflexcontroller_t *pflexcontroller = pstudiohdr->pFlexcontroller( index );
 
@@ -1278,7 +1465,7 @@ float CBaseFlex::GetFlexWeight( LocalFlexController_t index )
 				
 		return GetFlexWeightArray()[index];
 	}
-	return 0.0;
+	return 0.0f;
 }
 
 static cell_t BaseAnimatingSelectWeightedSequenceEx(IPluginContext *pContext, const cell_t *params)
@@ -1289,6 +1476,16 @@ static cell_t BaseAnimatingSelectWeightedSequenceEx(IPluginContext *pContext, co
 	}
 
 	return pEntity->SelectWeightedSequence((Activity)params[2]);
+}
+
+static cell_t BaseAnimatingSelectHeaviestSequenceEx(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseAnimating *pEntity = (CBaseAnimating *)gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+
+	return pEntity->SelectHeaviestSequence((Activity)params[2]);
 }
 
 static cell_t BaseAnimatingLookupSequence(IPluginContext *pContext, const cell_t *params)
@@ -1999,15 +2196,214 @@ static cell_t BaseFlexGetFlexWeight(IPluginContext *pContext, const cell_t *para
 	return sp_ftoc(pEntity->GetFlexWeight((LocalFlexController_t)params[2]));
 }
 
+static cell_t BaseAnimatingGetNumPoseParameters(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseAnimating *pEntity = (CBaseAnimating *)gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+	
+	return pEntity->GetNumPoseParameters();
+}
+
+static cell_t BaseAnimatingGetNumAttachments(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseAnimating *pEntity = (CBaseAnimating *)gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+	
+	return pEntity->GetNumAttachments();
+}
+
+static cell_t BaseAnimatingGetNumBones(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseAnimating *pEntity = (CBaseAnimating *)gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+	
+	return pEntity->GetNumBones();
+}
+
+static cell_t BaseAnimatingGetNumBodygroups(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseAnimating *pEntity = (CBaseAnimating *)gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+	
+	return pEntity->GetNumBodygroups();
+}
+
+static cell_t BaseAnimatingGetNumBoneControllers(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseAnimating *pEntity = (CBaseAnimating *)gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+	
+	return pEntity->GetNumBoneControllers();
+}
+
+static cell_t BaseAnimatingGetNumSequences(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseAnimating *pEntity = (CBaseAnimating *)gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+	
+	return pEntity->GetNumSequences();
+}
+
+static cell_t BaseAnimatingGetPoseParameterName(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseAnimating *pEntity = (CBaseAnimating *)gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+
+	const char *name = pEntity->GetPoseParameterName(params[2]);
+	pContext->StringToLocal(params[3], params[4], name);
+	return 0;
+}
+
+static cell_t BaseAnimatingGetAttachmentName(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseAnimating *pEntity = (CBaseAnimating *)gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+
+	const char *name = pEntity->GetAttachmentName(params[2]);
+	pContext->StringToLocal(params[3], params[4], name);
+	return 0;
+}
+
+static cell_t BaseAnimatingGetBoneName(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseAnimating *pEntity = (CBaseAnimating *)gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+
+	const char *name = pEntity->GetBoneName(params[2]);
+	pContext->StringToLocal(params[3], params[4], name);
+	return 0;
+}
+
+static cell_t BaseAnimatingGetBodygroupName(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseAnimating *pEntity = (CBaseAnimating *)gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+
+	const char *name = pEntity->GetBodygroupName(params[2]);
+	pContext->StringToLocal(params[3], params[4], name);
+	return 0;
+}
+
+static cell_t BaseAnimatingGetSequenceName(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseAnimating *pEntity = (CBaseAnimating *)gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+
+	const char *name = pEntity->GetSequenceName(params[2]);
+	pContext->StringToLocal(params[3], params[4], name);
+	return 0;
+}
+
+static cell_t BaseAnimatingGetSequenceActivityName(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseAnimating *pEntity = (CBaseAnimating *)gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+
+	const char *name = pEntity->GetSequenceActivityName(params[2]);
+	pContext->StringToLocal(params[3], params[4], name);
+	return 0;
+}
+
+static cell_t BaseFlexGetFlexControllerName(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseFlex *pEntity = (CBaseFlex *)gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+
+	const char *name = pEntity->GetFlexControllerName((LocalFlexController_t)params[2]);
+	pContext->StringToLocal(params[3], params[4], name);
+	return 0;
+}
+
+static cell_t BaseFlexGetNumFlexControllers(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseFlex *pEntity = (CBaseFlex *)gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+	
+	return pEntity->GetNumFlexControllers();
+}
+
+static cell_t ActivityList_IndexForNameNative(IPluginContext *pContext, const cell_t *params)
+{
+	char *name = nullptr;
+	pContext->LocalToString(params[1], &name);
+	
+	return ActivityList_IndexForName(name);
+}
+
+static cell_t EventList_IndexForNameNative(IPluginContext *pContext, const cell_t *params)
+{
+	char *name = nullptr;
+	pContext->LocalToString(params[1], &name);
+	
+	return EventList_IndexForName(name);
+}
+
+static cell_t ActivityList_NameForIndexNative(IPluginContext *pContext, const cell_t *params)
+{
+	const char *name = ActivityList_NameForIndex(params[1]);
+	pContext->StringToLocal(params[2], params[3], name);
+	return 0;
+}
+
+static cell_t EventList_NameForIndexNative(IPluginContext *pContext, const cell_t *params)
+{
+	const char *name = EventList_NameForIndex(params[1]);
+	pContext->StringToLocal(params[2], params[3], name);
+	return 0;
+}
+
 static const sp_nativeinfo_t g_sNativesInfo[] =
 {
 	{"BaseEntity.FireBullets", BaseEntityFireBullets},
 	{"BaseEntity.SetAbsOrigin", BaseEntitySetAbsOrigin},
 	{"BaseEntity.WorldSpaceCenter", BaseEntityWorldSpaceCenter},
 	{"BaseAnimating.SelectWeightedSequenceEx", BaseAnimatingSelectWeightedSequenceEx},
+	{"BaseAnimating.SelectHeaviestSequenceEx", BaseAnimatingSelectHeaviestSequenceEx},
 	{"BaseAnimating.LookupSequence", BaseAnimatingLookupSequence},
 	{"BaseAnimating.LookupActivity", BaseAnimatingLookupActivity},
 	{"BaseAnimating.LookupPoseParameter", BaseAnimatingLookupPoseParameter},
+	{"BaseAnimating.GetPoseParameterName", BaseAnimatingGetPoseParameterName},
+	{"BaseAnimating.GetAttachmentName", BaseAnimatingGetAttachmentName},
+	{"BaseAnimating.GetBoneName", BaseAnimatingGetBoneName},
+	{"BaseAnimating.GetBodygroupName", BaseAnimatingGetBodygroupName},
+	{"BaseAnimating.GetSequenceActivityName", BaseAnimatingGetSequenceActivityName},
+	{"BaseAnimating.GetSequenceName", BaseAnimatingGetSequenceName},
+	{"BaseFlex.GetFlexControllerName", BaseFlexGetFlexControllerName},
+	{"BaseAnimating.GetNumPoseParameters", BaseAnimatingGetNumPoseParameters},
+	{"BaseAnimating.GetNumAttachments", BaseAnimatingGetNumAttachments},
+	{"BaseAnimating.GetNumBones", BaseAnimatingGetNumBones},
+	{"BaseAnimating.GetNumBodygroups", BaseAnimatingGetNumBodygroups},
+	{"BaseAnimating.GetNumBoneControllers", BaseAnimatingGetNumBoneControllers},
+	{"BaseAnimating.GetNumSequences", BaseAnimatingGetNumSequences},
+	{"BaseFlex.GetNumFlexControllers", BaseFlexGetNumFlexControllers},
 	{"BaseAnimating.SetPoseParameterEx", BaseAnimatingSetPoseParameter},
 	{"BaseAnimating.GetPoseParameterEx", BaseAnimatingGetPoseParameter},
 	{"BaseAnimating.StudioFrameAdvance", BaseAnimatingStudioFrameAdvance},
@@ -2060,6 +2456,10 @@ static const sp_nativeinfo_t g_sNativesInfo[] =
 	{"BaseAnimatingOverlay.HasActiveLayer", BaseAnimatingOverlayHasActiveLayer},
 	{"BaseAnimatingOverlay.AllocateLayer", BaseAnimatingOverlayAllocateLayer},
 	{"BaseAnimatingOverlay.MaxOverlays", BaseAnimatingOverlayMaxOverlays},
+	{"ActivityList_IndexForName", ActivityList_IndexForNameNative},
+	{"ActivityList_NameForIndex", ActivityList_NameForIndexNative},
+	{"EventList_IndexForName", EventList_IndexForNameNative},
+	{"EventList_NameForIndex", EventList_NameForIndexNative},
 	{nullptr, nullptr},
 };
 
