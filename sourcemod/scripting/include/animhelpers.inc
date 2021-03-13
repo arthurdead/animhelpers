@@ -314,6 +314,10 @@ native void ActivityList_NameForIndex(int id, char[] name, int len);
 native int EventList_IndexForName(const char[] name);
 native void EventList_NameForIndex(int id, char[] name, int len);
 
+stock bool EntityIsAnimating(int entity) { return HasEntProp(entity, Prop_Send, "m_nSequence"); }
+stock bool EntityIsAnimatingOverlay(int entity) { return HasEntProp(entity, Prop_Data, "m_AnimOverlay"); }
+stock bool EntityIsFlex(int entity) { return HasEntProp(entity, Prop_Send, "m_flexWeight"); }
+
 #if !defined REQUIRE_EXTENSIONS
 public void __ext_animhelpers_SetNTVOptional()
 {
