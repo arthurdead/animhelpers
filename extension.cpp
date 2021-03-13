@@ -69,6 +69,8 @@ int m_AnimOverlayOffset = -1;
 int m_nBodyOffset = -1;
 int m_flEncodedControllerOffset = -1;
 int m_flexWeightOffset = -1;
+int m_rgflCoordinateFrameOffset = -1;
+int m_iEFlagsOffset = -1;
 
 int CBaseAnimatingStudioFrameAdvance = -1;
 int CBaseAnimatingDispatchAnimEvents = -1;
@@ -80,6 +82,7 @@ int CBaseEntityWorldSpaceCenter = -1;
 void *CBaseAnimatingResetSequenceInfo = nullptr;
 void *CBaseAnimatingLockStudioHdr = nullptr;
 void *CBaseEntitySetAbsOrigin = nullptr;
+void *CBaseEntityCalcAbsolutePosition = nullptr;
 
 template <typename R, typename T, typename ...Args>
 R call_mfunc(T *pThisPtr, void *offset, Args ...args)
@@ -182,6 +185,8 @@ enum TOGGLE_STATE : int;
 struct AI_CriteriaSet;
 struct FireBulletsInfo_t;
 
+#include <shareddefs.h>
+
 class CBaseEntity : public IServerEntity
 {
 public:
@@ -204,6 +209,39 @@ public:
 		call_mfunc<void, CBaseEntity, const Vector &>(this, CBaseEntitySetAbsOrigin, origin);
 	}
 	
+	int GetIEFlags()
+	{
+		if(m_iEFlagsOffset == -1) {
+			sm_datatable_info_t info{};
+			datamap_t *pMap = gamehelpers->GetDataMap(this);
+			gamehelpers->FindDataMapInfo(pMap, "m_iEFlags", &info);
+			m_iEFlagsOffset = info.actual_offset;
+		}
+		
+		return *(int *)((unsigned char *)this + m_iEFlagsOffset);
+	}
+	
+	matrix3x4_t &EntityToWorldTransform()
+	{
+		if(m_rgflCoordinateFrameOffset == -1) {
+			sm_datatable_info_t info{};
+			datamap_t *pMap = gamehelpers->GetDataMap(this);
+			gamehelpers->FindDataMapInfo(pMap, "m_rgflCoordinateFrame", &info);
+			m_rgflCoordinateFrameOffset = info.actual_offset;
+		}
+		
+		if(GetIEFlags() & EFL_DIRTY_ABSTRANSFORM) {
+			CalcAbsolutePosition();
+		}
+		
+		return *(matrix3x4_t *)((unsigned char *)this + m_rgflCoordinateFrameOffset);
+	}
+	
+	void CalcAbsolutePosition()
+	{
+		call_mfunc<void, CBaseEntity>(this, CBaseEntityCalcAbsolutePosition);
+	}
+	
 	const Vector &WorldSpaceCenter()
 	{
 		return call_vfunc<const Vector &>(this, CBaseEntityWorldSpaceCenter);
@@ -213,7 +251,6 @@ public:
 #include <mathlib/vmatrix.h>
 #include <ehandle.h>
 #include <predictioncopy.h>
-#include <shareddefs.h>
 #include <ai_activity.h>
 #include <activitylist.h>
 #include <eventlist.h>
@@ -335,6 +372,10 @@ public:
 		return bRet;
 	}
 	
+	bool GetAttachmentLocal( const char *szName, Vector &origin, QAngle &angles );
+	bool GetAttachmentLocal( int iAttachment, Vector &origin, QAngle &angles );
+	bool GetAttachmentLocal( int iAttachment, matrix3x4_t &attachmentToLocal );
+	
 	void SetBodygroup( int iGroup, int iValue );
 	
 	void GetBonePosition ( int iBone, Vector &origin, QAngle &angles );
@@ -368,7 +409,44 @@ public:
 	const char *GetBodygroupName(int id);
 	const char *GetSequenceName(int id);
 	const char *GetSequenceActivityName(int id);
+	
+	int GetAttachmentBone( int iAttachment );
 };
+
+bool CBaseAnimating::GetAttachmentLocal( const char *szName, Vector &origin, QAngle &angles )
+{
+	return GetAttachmentLocal( LookupAttachment( szName ), origin, angles );
+}
+
+bool CBaseAnimating::GetAttachmentLocal( int iAttachment, Vector &origin, QAngle &angles )
+{
+	matrix3x4_t attachmentToEntity;
+
+	bool bRet = GetAttachmentLocal( iAttachment, attachmentToEntity );
+	MatrixAngles( attachmentToEntity, angles, origin );
+	return bRet;
+}
+
+bool CBaseAnimating::GetAttachmentLocal( int iAttachment, matrix3x4_t &attachmentToLocal )
+{
+	matrix3x4_t attachmentToWorld;
+	bool bRet = GetAttachment(iAttachment, attachmentToWorld);
+	matrix3x4_t worldToEntity;
+	MatrixInvert( EntityToWorldTransform(), worldToEntity );
+	ConcatTransforms( worldToEntity, attachmentToWorld, attachmentToLocal ); 
+	return bRet;
+}
+
+int CBaseAnimating::GetAttachmentBone( int iAttachment )
+{
+	CStudioHdr *pStudioHdr = GetModelPtr( );
+	if (!pStudioHdr || iAttachment < 1 || iAttachment > pStudioHdr->GetNumAttachments() )
+	{
+		return -1;
+	}
+
+	return pStudioHdr->GetAttachmentBone( iAttachment-1 );
+}
 
 const char *CBaseAnimating::GetSequenceActivityName(int id)
 {
@@ -1527,6 +1605,16 @@ static cell_t BaseAnimatingLookupPoseParameter(IPluginContext *pContext, const c
 	return pEntity->LookupPoseParameter(name);
 }
 
+static cell_t BaseAnimatingGetAttachmentBone(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseAnimating *pEntity = (CBaseAnimating *)gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+
+	return pEntity->GetAttachmentBone(params[2]);
+}
+
 static cell_t BaseAnimatingSetPoseParameter(IPluginContext *pContext, const cell_t *params)
 {
 	CBaseAnimating *pEntity = (CBaseAnimating *)gamehelpers->ReferenceToEntity(params[1]);
@@ -2065,7 +2153,7 @@ static cell_t BaseAnimatingGetAttachmentEx(IPluginContext *pContext, const cell_
 	
 	Vector origin{};
 	QAngle angles{};
-	pEntity->GetAttachment(params[2], origin, angles);
+	bool ret = pEntity->GetAttachment(params[2], origin, angles);
 	
 	cell_t *addr = nullptr;
 	pContext->LocalToPhysAddr(params[3], &addr);
@@ -2084,7 +2172,40 @@ static cell_t BaseAnimatingGetAttachmentEx(IPluginContext *pContext, const cell_
 		addr[2] = sp_ftoc(angles.z);
 	}
 	
-	return 0;
+	return ret;
+}
+
+static cell_t BaseAnimatingGetAttachmentLocalEx(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseAnimating *pEntity = (CBaseAnimating *)gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+
+	cell_t *pNullVec = pContext->GetNullRef(SP_NULL_VECTOR);
+	
+	Vector origin{};
+	QAngle angles{};
+	bool ret = pEntity->GetAttachmentLocal(params[2], origin, angles);
+	
+	cell_t *addr = nullptr;
+	pContext->LocalToPhysAddr(params[3], &addr);
+	
+	if(addr != pNullVec) {
+		addr[0] = sp_ftoc(origin.x);
+		addr[1] = sp_ftoc(origin.y);
+		addr[2] = sp_ftoc(origin.z);
+	}
+	
+	pContext->LocalToPhysAddr(params[4], &addr);
+	
+	if(addr != pNullVec) {
+		addr[0] = sp_ftoc(angles.x);
+		addr[1] = sp_ftoc(angles.y);
+		addr[2] = sp_ftoc(angles.z);
+	}
+	
+	return ret;
 }
 
 static cell_t BaseAnimatingGetBonePositionEx(IPluginContext *pContext, const cell_t *params)
@@ -2419,6 +2540,7 @@ static const sp_nativeinfo_t g_sNativesInfo[] =
 	{"BaseAnimating.LookupPoseParameter", BaseAnimatingLookupPoseParameter},
 	{"BaseAnimating.GetPoseParameterName", BaseAnimatingGetPoseParameterName},
 	{"BaseAnimating.GetAttachmentName", BaseAnimatingGetAttachmentName},
+	{"BaseAnimating.GetAttachmentBoneEx", BaseAnimatingGetAttachmentBone},
 	{"BaseAnimating.GetBoneName", BaseAnimatingGetBoneName},
 	{"BaseAnimating.GetBodygroupName", BaseAnimatingGetBodygroupName},
 	{"BaseAnimating.GetSequenceActivityName", BaseAnimatingGetSequenceActivityName},
@@ -2439,6 +2561,7 @@ static const sp_nativeinfo_t g_sNativesInfo[] =
 	{"BaseAnimating.LookupAttachment", BaseAnimatingLookupAttachment},
 	{"BaseAnimating.FindBodygroupByName", BaseAnimatingFindBodygroupByName},
 	{"BaseAnimating.GetAttachmentEx", BaseAnimatingGetAttachmentEx},
+	{"BaseAnimating.GetAttachmentLocalEx", BaseAnimatingGetAttachmentLocalEx},
 	{"BaseAnimating.SetBodygroupEx", BaseAnimatingSetBodygroup},
 	{"BaseAnimating.LookupBone", BaseAnimatingLookupBone},
 	{"BaseAnimating.GetBonePositionEx", BaseAnimatingGetBonePositionEx},
@@ -2531,6 +2654,7 @@ bool Sample::SDK_OnLoad(char *error, size_t maxlen, bool late)
 	
 	g_pGameConf->GetMemSig("CBaseAnimating::ResetSequenceInfo", &CBaseAnimatingResetSequenceInfo);
 	g_pGameConf->GetMemSig("CBaseAnimating::LockStudioHdr", &CBaseAnimatingLockStudioHdr);
+	g_pGameConf->GetMemSig("CBaseAnimating::CalcAbsolutePosition", &CBaseEntityCalcAbsolutePosition);
 	
 	gameconfs->CloseGameConfigFile(g_pGameConf);
 	

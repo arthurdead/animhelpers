@@ -97,13 +97,32 @@ methodmap BaseAnimating < BaseEntity
 	public native int GetNumAttachments();
 	public native void GetAttachmentName(int id, char[] name, int len);
 	public native int LookupAttachment(const char[] pAttachmentName);
-	public native void GetAttachmentEx(int id, float absOrigin[3] = NULL_VECTOR, float absAngles[3] = NULL_VECTOR);
-	public void GetAttachment(const char[] szName, float absOrigin[3] = NULL_VECTOR, float absAngles[3] = NULL_VECTOR)
+	public native int GetAttachmentBoneEx(int id);
+	public native bool GetAttachmentEx(int id, float absOrigin[3] = NULL_VECTOR, float absAngles[3] = NULL_VECTOR);
+	public native bool GetAttachmentLocalEx(int id, float absOrigin[3] = NULL_VECTOR, float absAngles[3] = NULL_VECTOR);
+	public bool GetAttachment(const char[] szName, float absOrigin[3] = NULL_VECTOR, float absAngles[3] = NULL_VECTOR)
 	{
 		int id = this.LookupAttachment(szName);
 		if(id != -1) {
-			this.GetAttachmentEx(id, absOrigin, absAngles);
+			return this.GetAttachmentEx(id, absOrigin, absAngles);
 		}
+		return false;
+	}
+	public bool GetAttachmentLocal(const char[] szName, float absOrigin[3] = NULL_VECTOR, float absAngles[3] = NULL_VECTOR)
+	{
+		int id = this.LookupAttachment(szName);
+		if(id != -1) {
+			return this.GetAttachmentLocalEx(id, absOrigin, absAngles);
+		}
+		return false;
+	}
+	public int GetAttachmentBone(const char[] szName)
+	{
+		int id = this.LookupAttachment(szName);
+		if(id != -1) {
+			return this.GetAttachmentBoneEx(id);
+		}
+		return -1;
 	}
 
 	public native int GetNumBones();
