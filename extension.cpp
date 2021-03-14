@@ -531,11 +531,7 @@ const char *CBaseAnimating::GetBoneName(int id)
 		return "";
 	}
 	
-	const byte *pBoneTable = pStudioHdr->GetBoneTableSortedByName();
-	mstudiobone_t *pbones = pStudioHdr->pBone( 0 );
-	int mid = id >> 1;
-	
-	return pbones[pBoneTable[mid]].pszName();
+	return pStudioHdr->pBone( id )->pszName();
 }
 
 int CBaseAnimating::GetNumBones()
