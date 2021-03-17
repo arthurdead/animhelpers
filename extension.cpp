@@ -2167,6 +2167,37 @@ static cell_t BaseAnimatingGetAttachmentEx(IPluginContext *pContext, const cell_
 	return ret;
 }
 
+static cell_t BaseAnimatingGetAttachmentMatrixEx(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseAnimating *pEntity = (CBaseAnimating *)gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+
+	matrix3x4_t matrix{};
+	bool ret = pEntity->GetAttachment(params[2], matrix);
+	
+	cell_t *addr = nullptr;
+	pContext->LocalToPhysAddr(params[3], &addr);
+	
+	addr[0] = sp_ftoc(matrix[0][0]);
+	addr[1] = sp_ftoc(matrix[0][1]);
+	addr[2] = sp_ftoc(matrix[0][2]);
+	addr[3] = sp_ftoc(matrix[0][3]);
+	
+	addr[4] = sp_ftoc(matrix[1][0]);
+	addr[5] = sp_ftoc(matrix[1][1]);
+	addr[6] = sp_ftoc(matrix[1][2]);
+	addr[7] = sp_ftoc(matrix[1][3]);
+	
+	addr[8] = sp_ftoc(matrix[2][0]);
+	addr[9] = sp_ftoc(matrix[2][1]);
+	addr[10] = sp_ftoc(matrix[2][2]);
+	addr[11] = sp_ftoc(matrix[2][3]);
+	
+	return ret;
+}
+
 static cell_t BaseAnimatingGetAttachmentLocalEx(IPluginContext *pContext, const cell_t *params)
 {
 	CBaseAnimating *pEntity = (CBaseAnimating *)gamehelpers->ReferenceToEntity(params[1]);
@@ -2553,6 +2584,7 @@ static const sp_nativeinfo_t g_sNativesInfo[] =
 	{"BaseAnimating.LookupAttachment", BaseAnimatingLookupAttachment},
 	{"BaseAnimating.FindBodygroupByName", BaseAnimatingFindBodygroupByName},
 	{"BaseAnimating.GetAttachmentEx", BaseAnimatingGetAttachmentEx},
+	{"BaseAnimating.__GetAttachmentMatrixEx", BaseAnimatingGetAttachmentMatrixEx},
 	{"BaseAnimating.GetAttachmentLocalEx", BaseAnimatingGetAttachmentLocalEx},
 	{"BaseAnimating.SetBodygroupEx", BaseAnimatingSetBodygroup},
 	{"BaseAnimating.LookupBone", BaseAnimatingLookupBone},
