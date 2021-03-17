@@ -312,12 +312,12 @@ public:
 	
 	float *GetPoseParameterArray()
 	{
-		return *(float **)((unsigned char *)this + m_flPoseParameterOffset);
+		return &*(float *)((unsigned char *)this + m_flPoseParameterOffset);
 	}
 	
 	float *GetEncodedControllerArray()
 	{
-		return *(float **)((unsigned char *)this + m_flEncodedControllerOffset);
+		return &*(float *)((unsigned char *)this + m_flEncodedControllerOffset);
 	}
 	
 	void StudioFrameAdvance()
@@ -724,11 +724,7 @@ float CBaseAnimating::SequenceDuration(int sequence)
 	if(sequence >= pStudioHdr->GetNumSeq() || sequence < 0)
 		return 0.1f;
 
-	float *m_flPoseParameter = GetPoseParameterArray();
-	if(!m_flPoseParameter)
-		return 0.1f;
-
-	return Studio_Duration(pStudioHdr, sequence, m_flPoseParameter);
+	return Studio_Duration(pStudioHdr, sequence, GetPoseParameterArray());
 }
 
 class CBaseAnimatingOverlay;
@@ -1363,7 +1359,7 @@ void CBaseAnimating::SetPoseParameter(int index, float value)
 
 	if(index <= 0 || index >= pStudioHdr->GetNumPoseParameters())
 		return;
-
+	
 	float flNewValue = 0.0f;
 	Studio_SetPoseParameter(pStudioHdr, index, value, flNewValue);
 	GetPoseParameterArray()[index] = flNewValue;
