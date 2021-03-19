@@ -2557,12 +2557,12 @@ SH_DECL_MANUALHOOK0_void(GenericDtor, 0, 0, 0)
 SH_DECL_MANUALHOOK1_void(HandleAnimEvent, 0, 0, 0, animevent_t *)
 
 #define ANIMEVENT_STRUCT_SIZE 6
-#define ANUMEVENT_STR_SIZE 64
+#define ANIMEVENT_OPTIONS_STR_SIZE 64
 
 void AnimEventToAddr(IPluginContext *pContext, animevent_t *pEvent, cell_t *addr)
 {
 	addr[0] = pEvent->event;
-	pContext->StringToLocal(addr[1], ANUMEVENT_STR_SIZE, pEvent->options);
+	//pContext->StringToLocal(addr[1], ANIMEVENT_OPTIONS_STR_SIZE, pEvent->options);
 	addr[2] = sp_ftoc(pEvent->cycle);
 	addr[3] = sp_ftoc(pEvent->eventtime);
 	addr[4] = pEvent->type;
@@ -2572,7 +2572,7 @@ void AnimEventToAddr(IPluginContext *pContext, animevent_t *pEvent, cell_t *addr
 void AddrToAnimEvent(IPluginContext *pContext, animevent_t *pEvent, cell_t *addr)
 {
 	pEvent->event = addr[0];
-	pContext->LocalToString(addr[1], (char **)&pEvent->options);
+	//pContext->LocalToString(addr[1], (char **)&pEvent->options);
 	pEvent->cycle = sp_ctof(addr[2]);
 	pEvent->eventtime = sp_ctof(addr[3]);
 	pEvent->type = sp_ctof(addr[4]);
@@ -2600,16 +2600,24 @@ struct callback_holder_t
 			SH_ADD_MANUALHOOK(HandleAnimEvent, pEntity, SH_MEMBER(this, &callback_holder_t::HookHandleAnimEvent), false);
 		}
 	}
-
+	
 	void dtor()
 	{
-		SH_REMOVE_MANUALHOOK(GenericDtor, pEntity_, SH_MEMBER(this, &callback_holder_t::dtor), false);
+		SH_REMOVE_MANUALHOOK(GenericDtor, pEntity_, SH_MEMBER(this, &callback_holder_t::HookEntityDtor), false);
 		
 		if(callback) {
 			SH_REMOVE_MANUALHOOK(HandleAnimEvent, pEntity_, SH_MEMBER(this, &callback_holder_t::HookHandleAnimEvent), false);
 		}
 		
 		delete this;
+	}
+
+	void HookEntityDtor()
+	{
+		CBaseEntity *pEntity = META_IFACEPTR(CBaseEntity);
+		pEntity_ = pEntity;
+		dtor();
+		RETURN_META(MRES_IGNORED);
 	}
 	
 	void HookHandleAnimEvent(animevent_t *pEvent)
@@ -2649,9 +2657,9 @@ callback_holder_map_t callbackmap{};
 callback_holder_t::callback_holder_t(CBaseEntity *pEntity, IPluginContext *pContext_)
 	: pEntity_{pEntity}, pContext{pContext_}, owner{pContext_->GetIdentity()}
 {
-	SH_ADD_MANUALHOOK(GenericDtor, pEntity, SH_MEMBER(this, &callback_holder_t::dtor), false);
+	SH_ADD_MANUALHOOK(GenericDtor, pEntity_, SH_MEMBER(this, &callback_holder_t::HookEntityDtor), false);
 	
-	callbackmap[pEntity] = this;
+	callbackmap[pEntity_] = this;
 }
 
 callback_holder_t::~callback_holder_t()
@@ -2791,7 +2799,7 @@ bool Sample::SDK_OnMetamodLoad(ISmmAPI *ismm, char *error, size_t maxlen, bool l
 
 void Sample::OnPluginUnloaded(IPlugin *plugin)
 {
-	callback_holder_map_t::iterator it{callbackmap.begin()};
+	/*callback_holder_map_t::iterator it{callbackmap.begin()};
 	while(it != callbackmap.end()) {
 		if(it->second->owner == plugin->GetIdentity()) {
 			it->second->erase = false;
@@ -2801,7 +2809,7 @@ void Sample::OnPluginUnloaded(IPlugin *plugin)
 		}
 		
 		++it;
-	}
+	}*/
 }
 
 bool Sample::SDK_OnLoad(char *error, size_t maxlen, bool late)
