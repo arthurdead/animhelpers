@@ -44,10 +44,12 @@
  * @brief Sample implementation of the SDK Extension.
  * Note: Uncomment one of the pre-defined virtual functions in order to use it.
  */
-class Sample : public SDKExtension
+class Sample : public SDKExtension, public IPluginsListener
 {
 public:
 	void OnCoreMapStart(edict_t *pEdictList, int edictCount, int clientMax);
+	
+	virtual void OnPluginUnloaded(IPlugin *plugin);
 	
 	/**
 	 * @brief This is called after the initial loading sequence has been processed.

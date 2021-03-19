@@ -55,6 +55,10 @@
 			{
 				"linux" "206"
 			}
+			"CBaseAnimating::HandleAnimEvent"
+			{
+				"linux" "207"
+			}
 			"CBaseAnimating::m_pStudioHdr"
 			{
 				"linux" "60"

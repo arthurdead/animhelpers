@@ -43,6 +43,12 @@ methodmap BaseEntity
 	public native void SetAbsOrigin(float pos[3]);
 }
 
+typeset BaseAnimatingFuncs
+{
+	//SetHandleAnimEvent
+	function Action (BaseAnimating anim, animevent_t event, any data);
+};
+
 methodmap BaseAnimating < BaseEntity
 {
 	public BaseAnimating(int entity) { return view_as<BaseAnimating>(entity); }
@@ -217,6 +223,8 @@ methodmap BaseAnimating < BaseEntity
 			return 0.0;
 		}
 	}
+
+	public native void SetHandleAnimEvent(BaseAnimatingFuncs funcs, any data = 0);
 };
 
 methodmap BaseAnimatingOverlay < BaseAnimating

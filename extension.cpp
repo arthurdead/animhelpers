@@ -42,6 +42,8 @@
 #define CBASE_H
 
 #include "extension.h"
+#include <unordered_map>
+#include <IForwardSys.h>
 
 extern int g_nActivityListVersion;
 extern int g_nEventListVersion;
@@ -2551,6 +2553,136 @@ static cell_t EventList_NameForIndexNative(IPluginContext *pContext, const cell_
 	return 0;
 }
 
+SH_DECL_MANUALHOOK0_void(GenericDtor, 0, 0, 0)
+SH_DECL_MANUALHOOK1_void(HandleAnimEvent, 0, 0, 0, animevent_t *)
+
+#define ANIMEVENT_STRUCT_SIZE 6
+#define ANUMEVENT_STR_SIZE 64
+
+void AnimEventToAddr(IPluginContext *pContext, animevent_t *pEvent, cell_t *addr)
+{
+	addr[0] = pEvent->event;
+	pContext->StringToLocal(addr[1], ANUMEVENT_STR_SIZE, pEvent->options);
+	addr[2] = sp_ftoc(pEvent->cycle);
+	addr[3] = sp_ftoc(pEvent->eventtime);
+	addr[4] = pEvent->type;
+	addr[5] = gamehelpers->EntityToBCompatRef(pEvent->pSource);
+}
+
+void AddrToAnimEvent(IPluginContext *pContext, animevent_t *pEvent, cell_t *addr)
+{
+	pEvent->event = addr[0];
+	pContext->LocalToString(addr[1], (char **)&pEvent->options);
+	pEvent->cycle = sp_ctof(addr[2]);
+	pEvent->eventtime = sp_ctof(addr[3]);
+	pEvent->type = sp_ctof(addr[4]);
+	pEvent->pSource = (CBaseAnimating *)gamehelpers->ReferenceToEntity(addr[5]);
+}
+
+struct callback_holder_t
+{
+	IPluginFunction *callback = nullptr;
+	cell_t data = 0;
+	CBaseEntity *pEntity_ = nullptr;
+	IPluginContext *pContext = nullptr;
+	IdentityToken_t *owner = nullptr;
+	bool erase = true;
+	
+	callback_holder_t(CBaseEntity *pEntity, IPluginContext *pContext_);
+	~callback_holder_t();
+	
+	void add_hook(CBaseEntity *pEntity, IPluginFunction *callback_, cell_t data_)
+	{
+		bool had = callback != nullptr;
+		data = data_;
+		callback = callback_;
+		if(!had) {
+			SH_ADD_MANUALHOOK(HandleAnimEvent, pEntity, SH_MEMBER(this, &callback_holder_t::HookHandleAnimEvent), false);
+		}
+	}
+
+	void dtor()
+	{
+		SH_REMOVE_MANUALHOOK(GenericDtor, pEntity_, SH_MEMBER(this, &callback_holder_t::dtor), false);
+		
+		if(callback) {
+			SH_REMOVE_MANUALHOOK(HandleAnimEvent, pEntity_, SH_MEMBER(this, &callback_holder_t::HookHandleAnimEvent), false);
+		}
+		
+		delete this;
+	}
+	
+	void HookHandleAnimEvent(animevent_t *pEvent)
+	{
+		cell_t addr[ANIMEVENT_STRUCT_SIZE];
+		AnimEventToAddr(pContext, pEvent, addr);
+		
+		CBaseEntity *pEntity = META_IFACEPTR(CBaseEntity);
+		
+		callback->PushCell(gamehelpers->EntityToBCompatRef(pEntity));
+		callback->PushArray(addr, ANIMEVENT_STRUCT_SIZE, SM_PARAM_COPYBACK);
+		callback->PushCell(data);
+		cell_t res = 0;
+		callback->Execute(&res);
+		
+		switch(res) {
+			case Pl_Continue: {
+				RETURN_META(MRES_IGNORED);
+			}
+			case Pl_Changed: {
+				animevent_t copy{};
+				AddrToAnimEvent(pContext, &copy, addr);
+				
+				RETURN_META_MNEWPARAMS(MRES_HANDLED, HandleAnimEvent, (&copy));
+			}
+			case Pl_Handled:
+			case Pl_Stop: {
+				RETURN_META(MRES_SUPERCEDE);
+			}
+		}
+	}
+};
+
+using callback_holder_map_t = std::unordered_map<CBaseEntity *, callback_holder_t *>;
+callback_holder_map_t callbackmap{};
+
+callback_holder_t::callback_holder_t(CBaseEntity *pEntity, IPluginContext *pContext_)
+	: pEntity_{pEntity}, pContext{pContext_}, owner{pContext_->GetIdentity()}
+{
+	SH_ADD_MANUALHOOK(GenericDtor, pEntity, SH_MEMBER(this, &callback_holder_t::dtor), false);
+	
+	callbackmap[pEntity] = this;
+}
+
+callback_holder_t::~callback_holder_t()
+{
+	if(erase) {
+		callbackmap.erase(pEntity_);
+	}
+}
+
+static cell_t SetHandleAnimEvent(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseEntity *pEntity = gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+	
+	callback_holder_t *holder = nullptr;
+	
+	callback_holder_map_t::iterator it{callbackmap.find(pEntity)};
+	if(it != callbackmap.end()) {
+		holder = it->second;
+	} else {
+		holder = new callback_holder_t{pEntity, pContext};
+	}
+	
+	IPluginFunction *callback = pContext->GetFunctionById(params[2]);
+	holder->add_hook(pEntity, callback, params[3]);
+	
+	return 0;
+}
+
 static const sp_nativeinfo_t g_sNativesInfo[] =
 {
 	{"BaseEntity.FireBullets", BaseEntityFireBullets},
@@ -2592,6 +2724,7 @@ static const sp_nativeinfo_t g_sNativesInfo[] =
 	{"BaseAnimating.SequenceDurationEx", BaseAnimatingSequenceDuration},
 	{"BaseAnimating.GetBoneControllerEx", BaseAnimatingGetBoneControllerEx},
 	{"BaseAnimating.SetBoneControllerEx", BaseAnimatingSetBoneControllerEx},
+	{"BaseAnimating.SetHandleAnimEvent", SetHandleAnimEvent},
 	{"BaseFlex.FindFlexController", BaseFlexFindFlexController},
 	{"BaseFlex.SetFlexWeightEx", BaseFlexSetFlexWeight},
 	{"BaseFlex.GetFlexWeightEx", BaseFlexGetFlexWeight},
@@ -2639,17 +2772,13 @@ static const sp_nativeinfo_t g_sNativesInfo[] =
 
 void Sample::OnCoreMapStart(edict_t *pEdictList, int edictCount, int clientMax)
 {
-	if(g_nActivityListVersion <= 1) {
-		ActivityList_Free();
-		ActivityList_Init();
-		ActivityList_RegisterSharedActivities();
-	}
+	ActivityList_Free();
+	ActivityList_Init();
+	ActivityList_RegisterSharedActivities();
 
-	if(g_nEventListVersion <= 1) {
-		EventList_Free();
-		EventList_Init();
-		EventList_RegisterSharedEvents();
-	}
+	EventList_Free();
+	EventList_Init();
+	EventList_RegisterSharedEvents();
 }
 
 bool Sample::SDK_OnMetamodLoad(ISmmAPI *ismm, char *error, size_t maxlen, bool late)
@@ -2660,14 +2789,32 @@ bool Sample::SDK_OnMetamodLoad(ISmmAPI *ismm, char *error, size_t maxlen, bool l
 	return true;
 }
 
+void Sample::OnPluginUnloaded(IPlugin *plugin)
+{
+	callback_holder_map_t::iterator it{callbackmap.begin()};
+	while(it != callbackmap.end()) {
+		if(it->second->owner == plugin->GetIdentity()) {
+			it->second->erase = false;
+			callbackmap.erase(it);
+			it->second->dtor();
+			continue;
+		}
+		
+		++it;
+	}
+}
+
 bool Sample::SDK_OnLoad(char *error, size_t maxlen, bool late)
 {
 	IGameConfig *g_pGameConf = nullptr;
 	gameconfs->LoadGameConfigFile("animhelpers", &g_pGameConf, error, maxlen);
 	
+	int offset = -1;
+	g_pGameConf->GetOffset("CBaseAnimating::HandleAnimEvent", &offset);
+	SH_MANUALHOOK_RECONFIGURE(HandleAnimEvent, offset, 0, 0);
+	
 	g_pGameConf->GetOffset("CBaseEntity::FireBullets", &CBaseEntityFireBullets);
 	g_pGameConf->GetOffset("CBaseEntity::WorldSpaceCenter", &CBaseEntityWorldSpaceCenter);
-	g_pGameConf->GetMemSig("CBaseEntity::SetAbsOrigin", &CBaseEntitySetAbsOrigin);
 	
 	g_pGameConf->GetOffset("CBaseAnimating::m_pStudioHdr", &m_pStudioHdrOffset);
 	
@@ -2679,6 +2826,7 @@ bool Sample::SDK_OnLoad(char *error, size_t maxlen, bool late)
 	g_pGameConf->GetMemSig("CBaseAnimating::ResetSequenceInfo", &CBaseAnimatingResetSequenceInfo);
 	g_pGameConf->GetMemSig("CBaseAnimating::LockStudioHdr", &CBaseAnimatingLockStudioHdr);
 	g_pGameConf->GetMemSig("CBaseAnimating::CalcAbsolutePosition", &CBaseEntityCalcAbsolutePosition);
+	g_pGameConf->GetMemSig("CBaseEntity::SetAbsOrigin", &CBaseEntitySetAbsOrigin);
 	
 	gameconfs->CloseGameConfigFile(g_pGameConf);
 	
@@ -2705,6 +2853,8 @@ bool Sample::SDK_OnLoad(char *error, size_t maxlen, bool late)
 	m_pStudioHdrOffset += info.actual_offset;
 
 	sharesys->AddNatives(myself, g_sNativesInfo);
+	
+	plsys->AddPluginsListener(this);
 	
 	sharesys->RegisterLibrary(myself, "animhelpers");
 	
