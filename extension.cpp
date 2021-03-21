@@ -2601,12 +2601,12 @@ struct callback_holder_t
 		}
 	}
 	
-	void dtor()
+	void dtor(CBaseEntity *pEntity)
 	{
-		SH_REMOVE_MANUALHOOK(GenericDtor, pEntity_, SH_MEMBER(this, &callback_holder_t::HookEntityDtor), false);
+		SH_REMOVE_MANUALHOOK(GenericDtor, pEntity, SH_MEMBER(this, &callback_holder_t::HookEntityDtor), false);
 		
 		if(callback) {
-			SH_REMOVE_MANUALHOOK(HandleAnimEvent, pEntity_, SH_MEMBER(this, &callback_holder_t::HookHandleAnimEvent), false);
+			SH_REMOVE_MANUALHOOK(HandleAnimEvent, pEntity, SH_MEMBER(this, &callback_holder_t::HookHandleAnimEvent), false);
 		}
 		
 		delete this;
@@ -2615,8 +2615,7 @@ struct callback_holder_t
 	void HookEntityDtor()
 	{
 		CBaseEntity *pEntity = META_IFACEPTR(CBaseEntity);
-		pEntity_ = pEntity;
-		dtor();
+		dtor(pEntity);
 		RETURN_META(MRES_IGNORED);
 	}
 	
@@ -2804,7 +2803,7 @@ void Sample::OnPluginUnloaded(IPlugin *plugin)
 		if(it->second->owner == plugin->GetIdentity()) {
 			it->second->erase = false;
 			callbackmap.erase(it);
-			it->second->dtor();
+			it->second->dtor(it->second->pEntity_);
 			continue;
 		}
 		
