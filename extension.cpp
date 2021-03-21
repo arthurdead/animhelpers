@@ -2553,7 +2553,7 @@ static cell_t EventList_NameForIndexNative(IPluginContext *pContext, const cell_
 	return 0;
 }
 
-SH_DECL_MANUALHOOK0_void(GenericDtor, 0, 0, 0)
+SH_DECL_MANUALHOOK0_void(GenericDtor, 1, 0, 0)
 SH_DECL_MANUALHOOK1_void(HandleAnimEvent, 0, 0, 0, animevent_t *)
 
 #define ANIMEVENT_STRUCT_SIZE 6
@@ -2799,7 +2799,7 @@ bool Sample::SDK_OnMetamodLoad(ISmmAPI *ismm, char *error, size_t maxlen, bool l
 
 void Sample::OnPluginUnloaded(IPlugin *plugin)
 {
-	/*callback_holder_map_t::iterator it{callbackmap.begin()};
+	callback_holder_map_t::iterator it{callbackmap.begin()};
 	while(it != callbackmap.end()) {
 		if(it->second->owner == plugin->GetIdentity()) {
 			it->second->erase = false;
@@ -2809,7 +2809,7 @@ void Sample::OnPluginUnloaded(IPlugin *plugin)
 		}
 		
 		++it;
-	}*/
+	}
 }
 
 bool Sample::SDK_OnLoad(char *error, size_t maxlen, bool late)
