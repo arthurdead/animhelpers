@@ -84,6 +84,7 @@
 #define CL_EVENT_MFOOTSTEP_LEFT_LOUD	6008 // Loud material impact sounds from feet attachments
 #define CL_EVENT_MFOOTSTEP_RIGHT_LOUD	6009
 
+#if defined GAME_TF2
 #define TF_OBJ_ENABLEBODYGROUP			6000
 #define TF_OBJ_DISABLEBODYGROUP			6001
 #define TF_OBJ_ENABLEALLBODYGROUPS		6002
@@ -93,6 +94,7 @@
 #define TF_AE_CIGARETTE_THROW			7000
 #define TF_AE_GUN_SALUTE				7001
 #define TF_AE_PICKAXE_THROW				7002
+#endif
 
 #define AE_TYPE_SERVER			( 1 << 0 )
 #define AE_TYPE_SCRIPTED		( 1 << 1 )		// see scriptevent.h
@@ -168,10 +170,12 @@ enum
 
 	AE_WPN_PLAYWPNSOUND,	// Play a weapon sound from the weapon script file
 
+#if defined GAME_TF2
 	AE_RD_ROBOT_POP_PANELS_OFF,
 
 	AE_TAUNT_ENABLE_MOVE,
 	AE_TAUNT_DISABLE_MOVE,
+#endif
 
 	AE_CL_REMOVE_PARTICLE_EFFECT,
 

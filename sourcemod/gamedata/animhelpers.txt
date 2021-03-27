@@ -5,7 +5,9 @@
 		"#supported"
 		{
 			"game"	"tf"
+			"game"	"left4dead2"
 		}
+
 		"Signatures"
 		{
 			"CBaseAnimating::ResetSequenceInfo"
@@ -29,6 +31,48 @@
 				"linux" "@_ZN11CBaseEntity20CalcAbsolutePositionEv"
 			}
 		}
+	}
+	"left4dead2"
+	{
+		"Offsets"
+		{
+			"CBaseEntity::WorldSpaceCenter"
+			{
+				"linux" "162"
+			}
+			"CBaseEntity::FireBullets"
+			{
+				"linux" "123"
+			}
+			"CBaseAnimating::GetBoneTransform"
+			{
+				"linux" "214"
+			}
+			"CBaseAnimating::GetAttachment"
+			{
+				"linux" "220"
+			}
+			"CBaseAnimating::StudioFrameAdvance"
+			{
+				"linux" "203"
+			}
+			"CBaseAnimating::DispatchAnimEvents"
+			{
+				"linux" "217"
+			}
+			"CBaseAnimating::HandleAnimEvent"
+			{
+				"linux" "218"
+			}
+			"CBaseAnimating::m_pStudioHdr"
+			{
+				"linux" "60"
+				"windows" "60"
+			}
+		}
+	}
+	"tf"
+	{
 		"Offsets"
 		{
 			"CBaseEntity::WorldSpaceCenter"

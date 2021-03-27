@@ -31,12 +31,22 @@
 
 #define swap V_swap
 
+#if SOURCE_ENGINE == SE_TF2
+	#define TF_DLL
+	#define USES_ECON_ITEMS
+#elif SOURCE_ENGINE == SE_LEFT4DEAD2
+	#define TERROR
+	#define LEFT4DEAD
+#endif
+
+#if SOURCE_ENGINE == SE_LEFT4DEAD2
+	#define PREDICTIONCOPY_H
+#endif
+
 #define BASEENTITY_H
 #define BASEENTITY_SHARED_H
 #define NEXT_BOT
 #define GLOWS_ENABLE
-//#define TF_DLL
-//#define USES_ECON_ITEMS
 #define USE_NAV_MESH
 #define RAD_TELEMETRY_DISABLED
 #define CBASE_H
@@ -187,7 +197,7 @@ enum TOGGLE_STATE : int;
 struct AI_CriteriaSet;
 struct FireBulletsInfo_t;
 
-#include <shareddefs.h>
+#include <shared/shareddefs.h>
 
 class CBaseEntity : public IServerEntity
 {
@@ -250,10 +260,18 @@ public:
 	}
 };
 
+#if SOURCE_ENGINE == SE_LEFT4DEAD2
+enum
+{
+	kActivityLookup_Unknown = -2,			// hasn't been searched for
+	kActivityLookup_Missing = -1,			// has been searched for but wasn't found
+};
+#endif
+
 #include <mathlib/vmatrix.h>
 #include <ehandle.h>
 #include <predictioncopy.h>
-#include <ai_activity.h>
+#include <shared/ai_activity.h>
 #include <activitylist.h>
 #include <eventlist.h>
 #include <studio.h>
@@ -268,6 +286,27 @@ public:
 #define max(a,b) (((a)>(b))?(a):(b))
 
 #define typeof __typeof__
+
+#if SOURCE_ENGINE == SE_LEFT4DEAD2
+#undef stackalloc
+#define stackalloc( _size )		alloca( ALIGN_VALUE( _size, 16 ) )
+#endif
+
+#if SOURCE_ENGINE == SE_LEFT4DEAD2
+class CFlaggedEntitiesEnum : public IPartitionEnumerator
+{
+public:
+	CFlaggedEntitiesEnum( CBaseEntity **pList, int listMax, int flagMask )
+	{}
+	
+	IterationRetval_t EnumElement( IHandleEntity *pHandleEntity )
+	{ return ITERATION_CONTINUE; }
+};
+#endif
+
+#ifndef FMTFUNCTION
+#define FMTFUNCTION(...)
+#endif
 
 #include <animation.cpp>
 #include <studio.cpp>
@@ -2052,13 +2091,19 @@ static cell_t BaseEntityFireBullets(IPluginContext *pContext, const cell_t *para
 	info.m_iAmmoType = addr[11];
 	info.m_iTracerFreq = addr[12];
 	info.m_flDamage = sp_ctof(addr[13]);
+#if SOURCE_ENGINE == SE_TF2
 	info.m_iPlayerDamage = addr[14];
+#elif SOURCE_ENGINE == SE_LEFT4DEAD2
+	info.m_flPlayerDamage = addr[14];
+#endif
 	info.m_nFlags = addr[15];
 	info.m_flDamageForceScale = sp_ctof(addr[16]);
 	info.m_pAttacker = gamehelpers->ReferenceToEntity(addr[17]);
 	info.m_pAdditionalIgnoreEnt = gamehelpers->ReferenceToEntity(addr[18]);
 	info.m_bPrimaryAttack = addr[19];
+#if SOURCE_ENGINE == SE_TF2
 	info.m_bUseServerRandomSeed = addr[20];
+#endif
 	
 	pEntity->FireBullets(info);
 	return 0;

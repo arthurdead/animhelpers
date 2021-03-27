@@ -30,7 +30,9 @@ enum struct FireBulletsInfo_t
 	int m_pAttacker;
 	int m_pAdditionalIgnoreEnt;
 	bool m_bPrimaryAttack;
+#if defined GAME_TF2
 	bool m_bUseServerRandomSeed;
+#endif
 }
 
 #define FireBulletsInfo_tVar any[]
