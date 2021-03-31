@@ -52,6 +52,16 @@
 #define CBASE_H
 
 #include "extension.h"
+
+class IEngineTrace *enginetrace = nullptr;
+class IStaticPropMgrServer *staticpropmgr = nullptr;
+
+#include <public/const.h>
+#include <public/dt_send.h>
+#include <public/networkvar.h>
+#include <shared/shareddefs.h>
+#include <shared/util_shared.h>
+
 #include <unordered_map>
 #include <IForwardSys.h>
 
@@ -292,18 +302,6 @@ enum
 #define stackalloc( _size )		alloca( ALIGN_VALUE( _size, 16 ) )
 #endif
 
-#if SOURCE_ENGINE == SE_LEFT4DEAD2
-class CFlaggedEntitiesEnum : public IPartitionEnumerator
-{
-public:
-	CFlaggedEntitiesEnum( CBaseEntity **pList, int listMax, int flagMask )
-	{}
-	
-	IterationRetval_t EnumElement( IHandleEntity *pHandleEntity )
-	{ return ITERATION_CONTINUE; }
-};
-#endif
-
 #ifndef FMTFUNCTION
 #define FMTFUNCTION(...)
 #endif
@@ -311,7 +309,9 @@ public:
 #include <animation.cpp>
 #include <studio.cpp>
 #include <studio_shared.cpp>
+#if SOURCE_ENGINE == SE_TF2
 #include <bone_setup.cpp>
+#endif
 #include <stringregistry.cpp>
 #define ListFromString ListFromStringEvent
 #include <eventlist.cpp>
@@ -2606,7 +2606,11 @@ SH_DECL_MANUALHOOK1_void(HandleAnimEvent, 0, 0, 0, animevent_t *)
 
 void AnimEventToAddr(IPluginContext *pContext, animevent_t *pEvent, cell_t *addr)
 {
+#if SOURCE_ENGINE == SE_TF2
 	addr[0] = pEvent->event;
+#elif SOURCE_ENGINE == SE_LEFT4DEAD2
+	addr[0] = pEvent->Event();
+#endif
 	//pContext->StringToLocal(addr[1], ANIMEVENT_OPTIONS_STR_SIZE, pEvent->options);
 	addr[2] = sp_ftoc(pEvent->cycle);
 	addr[3] = sp_ftoc(pEvent->eventtime);
@@ -2616,7 +2620,11 @@ void AnimEventToAddr(IPluginContext *pContext, animevent_t *pEvent, cell_t *addr
 
 void AddrToAnimEvent(IPluginContext *pContext, animevent_t *pEvent, cell_t *addr)
 {
+#if SOURCE_ENGINE == SE_TF2
 	pEvent->event = addr[0];
+#elif SOURCE_ENGINE == SE_LEFT4DEAD2
+	
+#endif
 	//pContext->LocalToString(addr[1], (char **)&pEvent->options);
 	pEvent->cycle = sp_ctof(addr[2]);
 	pEvent->eventtime = sp_ctof(addr[3]);
