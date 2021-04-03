@@ -66,8 +66,8 @@
 			}
 			"CBaseAnimating::m_pStudioHdr"
 			{
-				"linux" "60"
-				"windows" "60"
+				"linux" "3784"
+				"windows" "3788"
 			}
 		}
 	}

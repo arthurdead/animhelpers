@@ -309,9 +309,7 @@ enum
 #include <animation.cpp>
 #include <studio.cpp>
 #include <studio_shared.cpp>
-#if SOURCE_ENGINE == SE_TF2
 #include <bone_setup.cpp>
-#endif
 #include <stringregistry.cpp>
 #define ListFromString ListFromStringEvent
 #include <eventlist.cpp>
@@ -320,6 +318,11 @@ enum
 #include "activitylist.cpp"
 #undef ListFromString
 #include <collisionutils.cpp>
+
+int SharedRandomInt( const char *sharedname, int iMinVal, int iMaxVal, int additionalSeed /*=0*/ )
+{
+	return RandomInt( iMinVal, iMaxVal );
+}
 
 void SetEdictStateChanged(CBaseEntity *pEntity, int offset)
 {
