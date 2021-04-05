@@ -93,6 +93,13 @@ int m_flEncodedControllerOffset = -1;
 int m_flexWeightOffset = -1;
 int m_rgflCoordinateFrameOffset = -1;
 int m_iEFlagsOffset = -1;
+int m_flPlaybackRateOffset = -1;
+int m_flCycleOffset = -1;
+int m_vecOriginOffset = -1;
+int m_angRotationOffset = -1;
+int m_bSequenceLoopsOffset = -1;
+int m_flAnimTimeOffset = -1;
+int m_flPrevAnimTimeOffset = -1;
 
 int CBaseAnimatingStudioFrameAdvance = -1;
 int CBaseAnimatingDispatchAnimEvents = -1;
@@ -259,6 +266,30 @@ public:
 		return *(matrix3x4_t *)((unsigned char *)this + m_rgflCoordinateFrameOffset);
 	}
 	
+	const Vector &GetLocalOrigin()
+	{
+		if(m_vecOriginOffset == -1) {
+			datamap_t *map = gamehelpers->GetDataMap(this);
+			sm_datatable_info_t info{};
+			gamehelpers->FindDataMapInfo(map, "m_vecOrigin", &info);
+			m_vecOriginOffset = info.actual_offset;
+		}
+		
+		return *(Vector *)(((unsigned char *)this) + m_vecOriginOffset);
+	}
+	
+	const QAngle &GetLocalAngles()
+	{
+		if(m_angRotationOffset == -1) {
+			datamap_t *map = gamehelpers->GetDataMap(this);
+			sm_datatable_info_t info{};
+			gamehelpers->FindDataMapInfo(map, "m_angRotation", &info);
+			m_angRotationOffset = info.actual_offset;
+		}
+		
+		return *(QAngle *)(((unsigned char *)this) + m_angRotationOffset);
+	}
+	
 	void CalcAbsolutePosition()
 	{
 		call_mfunc<void, CBaseEntity>(this, CBaseEntityCalcAbsolutePosition);
@@ -354,6 +385,33 @@ public:
 		return *(int *)((unsigned char *)this + m_nSequenceOffset);
 	}
 	
+	float GetPlaybackRate()
+	{
+		return *(float *)((unsigned char *)this + m_flPlaybackRateOffset);
+	}
+	
+	float GetCycle()
+	{
+		return *(float *)((unsigned char *)this + m_flCycleOffset);
+	}
+	
+	float GetAnimTime()
+	{
+		return *(int *)((unsigned char *)this + m_flAnimTimeOffset);
+	}
+	
+	float GetPrevAnimTime()
+	{
+		if(m_flPrevAnimTimeOffset == -1) {
+			datamap_t *map = gamehelpers->GetDataMap(this);
+			sm_datatable_info_t info{};
+			gamehelpers->FindDataMapInfo(map, "m_flPrevAnimTime", &info);
+			m_flPrevAnimTimeOffset = info.actual_offset;
+		}
+		
+		return *(float *)(((unsigned char *)this) + m_flPrevAnimTimeOffset);
+	}
+	
 	float *GetPoseParameterArray()
 	{
 		return &*(float *)((unsigned char *)this + m_flPoseParameterOffset);
@@ -362,6 +420,18 @@ public:
 	float *GetEncodedControllerArray()
 	{
 		return &*(float *)((unsigned char *)this + m_flEncodedControllerOffset);
+	}
+	
+	bool SequenceLoops()
+	{
+		if(m_bSequenceLoopsOffset == -1) {
+			datamap_t *map = gamehelpers->GetDataMap(this);
+			sm_datatable_info_t info{};
+			gamehelpers->FindDataMapInfo(map, "m_bSequenceLoops", &info);
+			m_bSequenceLoopsOffset = info.actual_offset;
+		}
+		
+		return *(bool *)(((unsigned char *)this) + m_bSequenceLoopsOffset);
 	}
 	
 	void StudioFrameAdvance()
@@ -433,6 +503,7 @@ public:
 	void SetPoseParameter(int index, float value);
 	int LookupPoseParameter(const char *name);
 	float SequenceDuration(int sequence);
+	float SequenceDuration( CStudioHdr *pStudioHdr, int sequence);
 	int GetSequenceFlags(int sequence);
 	
 	void SetBoneController ( int iController, float flValue );
@@ -455,7 +526,93 @@ public:
 	const char *GetSequenceActivityName(int id);
 	
 	int GetAttachmentBone( int iAttachment );
+	
+	float GetSequenceCycleRate( CStudioHdr *pStudioHdr, int iSequence );
+	float GetSequenceCycleRate( int iSequence );
+	
+	bool GetIntervalMovement( float flIntervalUsed, bool &bMoveSeqFinished, Vector &newPosition, QAngle &newAngles );
+	
+	float GetAnimTimeInterval( void );
+	
+	bool GetIntervalMovement( bool &bMoveSeqFinished, Vector &newPosition, QAngle &newAngles )
+	{ return GetIntervalMovement(GetAnimTimeInterval(), bMoveSeqFinished, newPosition, newAngles); }
 };
+
+float CBaseAnimating::GetSequenceCycleRate( CStudioHdr *pStudioHdr, int iSequence )
+{
+	float t = SequenceDuration( pStudioHdr, iSequence );
+
+	if ( t != 0.0f )
+	{
+		return 1.0f / t;
+	}
+	return t;
+}
+
+float CBaseAnimating::GetSequenceCycleRate( int iSequence )
+{
+	CStudioHdr *pstudiohdr = GetModelPtr( );
+	
+	return GetSequenceCycleRate(pstudiohdr, iSequence);
+}
+
+#define MAX_ANIMTIME_INTERVAL 0.2f
+
+float CBaseAnimating::GetAnimTimeInterval( void )
+{
+	float flInterval;
+	if (GetAnimTime() < gpGlobals->curtime)
+	{
+		// estimate what it'll be this frame
+		flInterval = clamp( gpGlobals->curtime - GetAnimTime(), 0.f, MAX_ANIMTIME_INTERVAL );
+	}
+	else
+	{
+		// report actual
+		flInterval = clamp( GetAnimTime() - GetPrevAnimTime(), 0.f, MAX_ANIMTIME_INTERVAL );
+	}
+	return flInterval;
+}
+
+bool CBaseAnimating::GetIntervalMovement( float flIntervalUsed, bool &bMoveSeqFinished, Vector &newPosition, QAngle &newAngles )
+{
+	CStudioHdr *pstudiohdr = GetModelPtr( );
+	if (! pstudiohdr || !pstudiohdr->SequencesAvailable())
+		return false;
+
+	float flComputedCycleRate = GetSequenceCycleRate( pstudiohdr, GetSequence() );
+	
+	float flNextCycle = GetCycle() + flIntervalUsed * flComputedCycleRate * GetPlaybackRate();
+
+	if ((!SequenceLoops()) && flNextCycle > 1.0)
+	{
+		flIntervalUsed = GetCycle() / (flComputedCycleRate * GetPlaybackRate());
+		flNextCycle = 1.0;
+		bMoveSeqFinished = true;
+	}
+	else
+	{
+		bMoveSeqFinished = false;
+	}
+
+	Vector deltaPos;
+	QAngle deltaAngles;
+
+	if (Studio_SeqMovement( pstudiohdr, GetSequence(), GetCycle(), flNextCycle, GetPoseParameterArray(), deltaPos, deltaAngles ))
+	{
+		VectorYawRotate( deltaPos, GetLocalAngles().y, deltaPos );
+		newPosition = GetLocalOrigin() + deltaPos;
+		newAngles.Init();
+		newAngles.y = GetLocalAngles().y + deltaAngles.y;
+		return true;
+	}
+	else
+	{
+		newPosition = GetLocalOrigin();
+		newAngles = GetLocalAngles();
+		return false;
+	}
+}
 
 bool CBaseAnimating::GetAttachmentLocal( const char *szName, Vector &origin, QAngle &angles )
 {
@@ -755,10 +912,8 @@ int CBaseAnimating::GetSequenceFlags(int sequence)
 	return ::GetSequenceFlags(pStudioHdr, sequence);
 }
 
-float CBaseAnimating::SequenceDuration(int sequence)
+float CBaseAnimating::SequenceDuration(CStudioHdr *pStudioHdr, int sequence)
 {
-	CStudioHdr *pStudioHdr = GetModelPtr();
-
 	if(!pStudioHdr)
 		return 0.1f;
 
@@ -769,6 +924,13 @@ float CBaseAnimating::SequenceDuration(int sequence)
 		return 0.1f;
 
 	return Studio_Duration(pStudioHdr, sequence, GetPoseParameterArray());
+}
+
+float CBaseAnimating::SequenceDuration(int sequence)
+{
+	CStudioHdr *pStudioHdr = GetModelPtr();
+
+	return SequenceDuration(pStudioHdr, sequence);
 }
 
 class CBaseAnimatingOverlay;
@@ -2724,7 +2886,7 @@ callback_holder_t::~callback_holder_t()
 	}
 }
 
-static cell_t SetHandleAnimEvent(IPluginContext *pContext, const cell_t *params)
+static cell_t BaseAnimatingSetHandleAnimEvent(IPluginContext *pContext, const cell_t *params)
 {
 	CBaseEntity *pEntity = gamehelpers->ReferenceToEntity(params[1]);
 	if(!pEntity) {
@@ -2744,6 +2906,44 @@ static cell_t SetHandleAnimEvent(IPluginContext *pContext, const cell_t *params)
 	holder->add_hook(pEntity, callback, params[3]);
 	
 	return 0;
+}
+
+static cell_t BaseAnimatingGetIntervalMovement(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseAnimating *pEntity = (CBaseAnimating *)gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+	
+	bool bMoveSeqFinished = false;
+	Vector newPosition{};
+	QAngle newAngles{};
+	bool ret = pEntity->GetIntervalMovement(bMoveSeqFinished, newPosition, newAngles);
+	
+	cell_t *addr = nullptr;
+	pContext->LocalToPhysAddr(params[2], &addr);
+	
+	*addr = bMoveSeqFinished;
+	
+	cell_t *pNullVec = pContext->GetNullRef(SP_NULL_VECTOR);
+	
+	pContext->LocalToPhysAddr(params[3], &addr);
+	
+	if(addr != pNullVec) {
+		addr[0] = sp_ftoc(newPosition.x);
+		addr[1] = sp_ftoc(newPosition.y);
+		addr[2] = sp_ftoc(newPosition.z);
+	}
+	
+	pContext->LocalToPhysAddr(params[4], &addr);
+	
+	if(addr != pNullVec) {
+		addr[0] = sp_ftoc(newAngles.x);
+		addr[1] = sp_ftoc(newAngles.y);
+		addr[2] = sp_ftoc(newAngles.z);
+	}
+	
+	return ret;
 }
 
 static const sp_nativeinfo_t g_sNativesInfo[] =
@@ -2787,7 +2987,8 @@ static const sp_nativeinfo_t g_sNativesInfo[] =
 	{"BaseAnimating.SequenceDurationEx", BaseAnimatingSequenceDuration},
 	{"BaseAnimating.GetBoneControllerEx", BaseAnimatingGetBoneControllerEx},
 	{"BaseAnimating.SetBoneControllerEx", BaseAnimatingSetBoneControllerEx},
-	{"BaseAnimating.SetHandleAnimEvent", SetHandleAnimEvent},
+	{"BaseAnimating.SetHandleAnimEvent", BaseAnimatingSetHandleAnimEvent},
+	{"BaseAnimating.GetIntervalMovement", BaseAnimatingGetIntervalMovement},
 	{"BaseFlex.FindFlexController", BaseFlexFindFlexController},
 	{"BaseFlex.SetFlexWeightEx", BaseFlexSetFlexWeight},
 	{"BaseFlex.GetFlexWeightEx", BaseFlexGetFlexWeight},
@@ -2905,6 +3106,15 @@ bool Sample::SDK_OnLoad(char *error, size_t maxlen, bool late)
 	
 	gamehelpers->FindSendPropInfo("CBaseAnimating", "m_flEncodedController", &info);
 	m_flEncodedControllerOffset = info.actual_offset;
+	
+	gamehelpers->FindSendPropInfo("CBaseAnimating", "m_flPlaybackRate", &info);
+	m_flPlaybackRateOffset = info.actual_offset;
+	
+	gamehelpers->FindSendPropInfo("CBaseAnimating", "m_flCycle", &info);
+	m_flCycleOffset = info.actual_offset;
+	
+	gamehelpers->FindSendPropInfo("CBaseAnimating", "m_flAnimTime", &info);
+	m_flAnimTimeOffset = info.actual_offset;
 	
 	gamehelpers->FindSendPropInfo("CBaseFlex", "m_flexWeight", &info);
 	m_flexWeightOffset = info.actual_offset;

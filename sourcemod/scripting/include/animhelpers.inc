@@ -232,6 +232,8 @@ methodmap BaseAnimating < BaseEntity
 	}
 
 	public native void SetHandleAnimEvent(BaseAnimatingFuncs funcs, any data = 0);
+
+	public native bool GetIntervalMovement(bool &bMoveSeqFinished = false, float pos[3] = NULL_VECTOR, float ang[3] = NULL_VECTOR);
 };
 
 methodmap BaseAnimatingOverlay < BaseAnimating
