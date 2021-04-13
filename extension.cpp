@@ -531,11 +531,14 @@ public:
 	float GetSequenceCycleRate( int iSequence );
 	
 	bool GetIntervalMovement( float flIntervalUsed, bool &bMoveSeqFinished, Vector &newPosition, QAngle &newAngles );
+	bool GetSequenceMovement( float flIntervalUsed, bool &bMoveSeqFinished, Vector &deltaPosition, QAngle &deltaAngles );
 	
 	float GetAnimTimeInterval( void );
 	
 	bool GetIntervalMovement( bool &bMoveSeqFinished, Vector &newPosition, QAngle &newAngles )
 	{ return GetIntervalMovement(GetAnimTimeInterval(), bMoveSeqFinished, newPosition, newAngles); }
+	bool GetSequenceMovement( bool &bMoveSeqFinished, Vector &newPosition, QAngle &newAngles )
+	{ return GetSequenceMovement(GetAnimTimeInterval(), bMoveSeqFinished, newPosition, newAngles); }
 };
 
 float CBaseAnimating::GetSequenceCycleRate( CStudioHdr *pStudioHdr, int iSequence )
@@ -572,6 +575,44 @@ float CBaseAnimating::GetAnimTimeInterval( void )
 		flInterval = clamp( GetAnimTime() - GetPrevAnimTime(), 0.f, MAX_ANIMTIME_INTERVAL );
 	}
 	return flInterval;
+}
+
+bool CBaseAnimating::GetSequenceMovement( float flIntervalUsed, bool &bMoveSeqFinished, Vector &newPosition, QAngle &newAngles )
+{
+	CStudioHdr *pstudiohdr = GetModelPtr( );
+	if (! pstudiohdr || !pstudiohdr->SequencesAvailable())
+		return false;
+
+	float flComputedCycleRate = GetSequenceCycleRate( pstudiohdr, GetSequence() );
+	
+	float flNextCycle = GetCycle() + flIntervalUsed * flComputedCycleRate * GetPlaybackRate();
+
+	if ((!SequenceLoops()) && flNextCycle > 1.0)
+	{
+		flIntervalUsed = GetCycle() / (flComputedCycleRate * GetPlaybackRate());
+		flNextCycle = 1.0;
+		bMoveSeqFinished = true;
+	}
+	else
+	{
+		bMoveSeqFinished = false;
+	}
+
+	Vector deltaPos;
+	QAngle deltaAngles;
+
+	if (Studio_SeqMovement( pstudiohdr, GetSequence(), GetCycle(), flNextCycle, GetPoseParameterArray(), deltaPos, deltaAngles ))
+	{
+		VectorYawRotate( deltaPos, GetLocalAngles().y, deltaPos );
+		newPosition = deltaPos;
+		newAngles.Init();
+		newAngles.y = deltaAngles.y;
+		return true;
+	}
+	else
+	{
+		return false;
+	}
 }
 
 bool CBaseAnimating::GetIntervalMovement( float flIntervalUsed, bool &bMoveSeqFinished, Vector &newPosition, QAngle &newAngles )
@@ -2946,6 +2987,44 @@ static cell_t BaseAnimatingGetIntervalMovement(IPluginContext *pContext, const c
 	return ret;
 }
 
+static cell_t BaseAnimatingGetSequenceMovement(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseAnimating *pEntity = (CBaseAnimating *)gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+	
+	bool bMoveSeqFinished = false;
+	Vector newPosition{};
+	QAngle newAngles{};
+	bool ret = pEntity->GetSequenceMovement(bMoveSeqFinished, newPosition, newAngles);
+	
+	cell_t *addr = nullptr;
+	pContext->LocalToPhysAddr(params[2], &addr);
+	
+	*addr = bMoveSeqFinished;
+	
+	cell_t *pNullVec = pContext->GetNullRef(SP_NULL_VECTOR);
+	
+	pContext->LocalToPhysAddr(params[3], &addr);
+	
+	if(addr != pNullVec) {
+		addr[0] = sp_ftoc(newPosition.x);
+		addr[1] = sp_ftoc(newPosition.y);
+		addr[2] = sp_ftoc(newPosition.z);
+	}
+	
+	pContext->LocalToPhysAddr(params[4], &addr);
+	
+	if(addr != pNullVec) {
+		addr[0] = sp_ftoc(newAngles.x);
+		addr[1] = sp_ftoc(newAngles.y);
+		addr[2] = sp_ftoc(newAngles.z);
+	}
+	
+	return ret;
+}
+
 static const sp_nativeinfo_t g_sNativesInfo[] =
 {
 	{"BaseEntity.FireBullets", BaseEntityFireBullets},
@@ -2989,6 +3068,7 @@ static const sp_nativeinfo_t g_sNativesInfo[] =
 	{"BaseAnimating.SetBoneControllerEx", BaseAnimatingSetBoneControllerEx},
 	{"BaseAnimating.SetHandleAnimEvent", BaseAnimatingSetHandleAnimEvent},
 	{"BaseAnimating.GetIntervalMovement", BaseAnimatingGetIntervalMovement},
+	{"BaseAnimating.GetSequenceMovement", BaseAnimatingGetSequenceMovement},
 	{"BaseFlex.FindFlexController", BaseFlexFindFlexController},
 	{"BaseFlex.SetFlexWeightEx", BaseFlexSetFlexWeight},
 	{"BaseFlex.GetFlexWeightEx", BaseFlexGetFlexWeight},
