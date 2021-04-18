@@ -61,6 +61,10 @@ class IStaticPropMgrServer *staticpropmgr = nullptr;
 #include <public/networkvar.h>
 #include <shared/shareddefs.h>
 #include <shared/util_shared.h>
+#include <datacache/imdlcache.h>
+#include <materialsystem/imaterial.h>
+#include <materialsystem/imaterialsystem.h>
+#include <bspfile.h>
 
 #include <unordered_map>
 #include <IForwardSys.h>
@@ -71,7 +75,9 @@ extern int g_nEventListVersion;
 class IFileSystem;
 
 IVModelInfo *modelinfo = nullptr;
+IMDLCache *mdlcache = nullptr;
 IFileSystem *filesystem = nullptr;
+IMaterialSystem *materials = nullptr;
 
 /**
  * @file extension.cpp
@@ -539,7 +545,22 @@ public:
 	{ return GetIntervalMovement(GetAnimTimeInterval(), bMoveSeqFinished, newPosition, newAngles); }
 	bool GetSequenceMovement( bool &bMoveSeqFinished, Vector &newPosition, QAngle &newAngles )
 	{ return GetSequenceMovement(GetAnimTimeInterval(), bMoveSeqFinished, newPosition, newAngles); }
+	
+	Activity GetSequenceActivity( int iSequence );
 };
+
+Activity CBaseAnimating::GetSequenceActivity( int iSequence )
+{
+	if( iSequence == -1 )
+	{
+		return ACT_INVALID;
+	}
+
+	if ( !GetModelPtr() )
+		return ACT_INVALID;
+
+	return (Activity)::GetSequenceActivity( GetModelPtr(), iSequence );
+}
 
 float CBaseAnimating::GetSequenceCycleRate( CStudioHdr *pStudioHdr, int iSequence )
 {
@@ -2743,6 +2764,16 @@ static cell_t BaseAnimatingGetSequenceActivityName(IPluginContext *pContext, con
 	return 0;
 }
 
+static cell_t BaseAnimatingGetSequenceActivity(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseAnimating *pEntity = (CBaseAnimating *)gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+	
+	return (cell_t)pEntity->GetSequenceActivity(params[2]);
+}
+
 static cell_t BaseFlexGetFlexControllerName(IPluginContext *pContext, const cell_t *params)
 {
 	CBaseFlex *pEntity = (CBaseFlex *)gamehelpers->ReferenceToEntity(params[1]);
@@ -3025,22 +3056,496 @@ static cell_t BaseAnimatingGetSequenceMovement(IPluginContext *pContext, const c
 	return ret;
 }
 
+static cell_t Model_tTypeget(IPluginContext *pContext, const cell_t *params)
+{
+	model_t *mod = (model_t *)params[1];
+	return modelinfo->GetModelType(mod);
+}
+
+static cell_t Model_tGetName(IPluginContext *pContext, const cell_t *params)
+{
+	model_t *mod = (model_t *)params[1];
+	const char *ptr = modelinfo->GetModelName(mod);
+	pContext->StringToLocal(params[2], params[3], ptr);
+	return 0;
+}
+
+static cell_t Model_tGetBounds(IPluginContext *pContext, const cell_t *params)
+{
+	model_t *mod = (model_t *)params[1];
+	
+	Vector mins{};
+	Vector maxs{};
+	modelinfo->GetModelBounds(mod, mins, maxs);
+	
+	cell_t *addr = nullptr;
+	pContext->LocalToPhysAddr(params[2], &addr);
+	addr[0] = sp_ftoc(mins.x);
+	addr[1] = sp_ftoc(mins.y);
+	addr[2] = sp_ftoc(mins.z);
+	
+	pContext->LocalToPhysAddr(params[3], &addr);
+	addr[0] = sp_ftoc(maxs.x);
+	addr[1] = sp_ftoc(maxs.y);
+	addr[2] = sp_ftoc(maxs.z);
+	
+	return 0;
+}
+
+static cell_t Model_tGetRenderBounds(IPluginContext *pContext, const cell_t *params)
+{
+	model_t *mod = (model_t *)params[1];
+	
+	Vector mins{};
+	Vector maxs{};
+	modelinfo->GetModelRenderBounds(mod, mins, maxs);
+	
+	cell_t *addr = nullptr;
+	pContext->LocalToPhysAddr(params[2], &addr);
+	addr[0] = sp_ftoc(mins.x);
+	addr[1] = sp_ftoc(mins.y);
+	addr[2] = sp_ftoc(mins.z);
+	
+	pContext->LocalToPhysAddr(params[3], &addr);
+	addr[0] = sp_ftoc(maxs.x);
+	addr[1] = sp_ftoc(maxs.y);
+	addr[2] = sp_ftoc(maxs.z);
+	
+	return 0;
+}
+
+static cell_t Model_tRadiusget(IPluginContext *pContext, const cell_t *params)
+{
+	model_t *mod = (model_t *)params[1];
+	return sp_ftoc(modelinfo->GetModelRadius(mod));
+}
+
+static cell_t Model_tMaterialCountget(IPluginContext *pContext, const cell_t *params)
+{
+	model_t *mod = (model_t *)params[1];
+	return modelinfo->GetModelMaterialCount(mod);
+}
+
+struct msurface2_t;
+typedef msurface2_t *SurfaceHandle_t;
+
+struct cplane_t;
+struct mleaf_t;
+struct mleafwaterdata_t;
+struct mvertex_t;
+struct doccluderdata_t;
+struct doccluderpolydata_t;
+struct mtexinfo_t;
+struct csurface_t;
+struct msurface1_t;
+struct msurfacelighting_t;
+struct msurfacenormal_t;
+struct dfacebrushlist_t;
+struct dworldlight_t;
+struct lightzbuffer_t;
+struct mprimitive_t;
+struct mprimvert_t;
+struct darea_t;
+struct dareaportal_t;
+struct mcubemapsample_t;
+struct mleafambientindex_t;
+struct mleafambientlighting_t;
+class CMemoryStack;
+using HDISPINFOARRAY = void *;
+struct ColorRGBExp32;
+struct mnode_t;
+
+struct worldbrushdata_t
+{
+	int			numsubmodels;
+	
+	int			numplanes;
+	cplane_t	*planes;
+
+	int			numleafs;		// number of visible leafs, not counting 0
+	mleaf_t		*leafs;
+
+	int			numleafwaterdata;
+	mleafwaterdata_t *leafwaterdata;
+
+	int			numvertexes;
+	mvertex_t	*vertexes;
+
+	int			numoccluders;
+	doccluderdata_t *occluders;
+
+	int			numoccluderpolys;
+	doccluderpolydata_t *occluderpolys;
+
+	int			numoccludervertindices;
+	int			*occludervertindices;
+
+	int				numvertnormalindices;	// These index vertnormals.
+	unsigned short	*vertnormalindices;
+
+	int			numvertnormals;
+	Vector		*vertnormals;
+
+	int			numnodes;
+	mnode_t		*nodes;
+	unsigned short *m_LeafMinDistToWater;
+
+	int			numtexinfo;
+	mtexinfo_t	*texinfo;
+
+	int			numtexdata;
+	csurface_t	*texdata;
+
+	int         numDispInfos;
+	HDISPINFOARRAY	hDispInfos;	// Use DispInfo_Index to get IDispInfos..
+
+	/*
+	int         numOrigSurfaces;
+	msurface_t  *pOrigSurfaces;
+	*/
+
+	int			numsurfaces;
+	msurface1_t	*surfaces1;
+	msurface2_t	*surfaces2;
+	msurfacelighting_t *surfacelighting;
+	msurfacenormal_t *surfacenormals;
+	
+#if SOURCE_ENGINE == SE_LEFT4DEAD2
+	unsigned short *m_pSurfaceBrushes;
+	dfacebrushlist_t *m_pSurfaceBrushList;
+#elif SOURCE_ENGINE == SE_TF2
+	bool		unloadedlightmaps;
+#endif
+	
+	int			numvertindices;
+	unsigned short *vertindices;
+
+	int nummarksurfaces;
+	SurfaceHandle_t *marksurfaces;
+
+	ColorRGBExp32		*lightdata;
+#if SOURCE_ENGINE == SE_LEFT4DEAD2
+	int					m_nLightingDataSize;
+#endif
+	
+	int			numworldlights;
+	dworldlight_t *worldlights;
+
+	lightzbuffer_t *shadowzbuffers;
+
+	// non-polygon primitives (strips and lists)
+	int			numprimitives;
+	mprimitive_t *primitives;
+
+	int			numprimverts;
+	mprimvert_t *primverts;
+
+	int			numprimindices;
+	unsigned short *primindices;
+
+	int				m_nAreas;
+	darea_t			*m_pAreas;
+
+	int				m_nAreaPortals;
+	dareaportal_t	*m_pAreaPortals;
+
+	int				m_nClipPortalVerts;
+	Vector			*m_pClipPortalVerts;
+
+	mcubemapsample_t  *m_pCubemapSamples;
+	int				   m_nCubemapSamples;
+
+	int				m_nDispInfoReferences;
+	unsigned short	*m_pDispInfoReferences;
+
+	mleafambientindex_t		*m_pLeafAmbient;
+	mleafambientlighting_t	*m_pAmbientSamples;
+
+#if SOURCE_ENGINE == SE_LEFT4DEAD2
+	// specific technique that discards all the lightmaps after load
+	// no lightstyles or dlights are possible with this technique
+	bool		m_bUnloadedAllLightmaps;
+
+	CMemoryStack	*m_pLightingDataStack;
+
+	int              m_nBSPFileSize;
+#endif
+};
+
+class IDispInfo;
+
+typedef unsigned short WorldDecalHandle_t;
+typedef unsigned short ShadowDecalHandle_t;
+typedef unsigned short OverlayFragmentHandle_t;
+
+#pragma pack(1)
+// NOTE: 32-bytes.  Aligned/indexed often
+struct msurface2_t
+{
+	unsigned int			flags;			// see SURFDRAW_ #defines (only 22-bits right now)
+	// These are packed in to flags now
+	//unsigned char			vertCount;		// number of verts for this surface
+	//unsigned char			sortGroup;		// only uses 2 bits, subdivide?
+	cplane_t				*plane;			// pointer to shared plane	
+	int						firstvertindex;	// look up in model->vertindices[] (only uses 17-18 bits?)
+	WorldDecalHandle_t		decals;
+	ShadowDecalHandle_t		m_ShadowDecals; // unsigned short
+	OverlayFragmentHandle_t m_nFirstOverlayFragment;	// First overlay fragment on the surface (short)
+	short					materialSortID;
+	unsigned short			vertBufferIndex;
+
+	unsigned short			m_bDynamicShadowsEnabled : 1;	// Can this surface receive dynamic shadows?
+	unsigned short			texinfo : 15;
+
+	IDispInfo				*pDispInfo;         // displacement map information
+	int						visframe;		// should be drawn when node is crossed
+};
+#pragma pack()
+
+inline const SurfaceHandle_t SurfaceHandleFromIndex( int surfaceIndex, const worldbrushdata_t *pData )
+{
+	return &pData->surfaces2[surfaceIndex];
+}
+
+struct mtexinfo_t
+{
+	Vector4D	textureVecsTexelsPerWorldUnits[2];	// [s/t] unit vectors in world space. 
+							                        // [i][3] is the s/t offset relative to the origin.
+	Vector4D	lightmapVecsLuxelsPerWorldUnits[2];
+	float		luxelsPerWorldUnit;
+	float		worldUnitsPerLuxel;
+	unsigned short flags;		// SURF_ flags.
+	unsigned short texinfoFlags;// TEXINFO_ flags.
+	IMaterial	*material;
+	
+	mtexinfo_t( mtexinfo_t const& src )
+	{
+		// copy constructor needed since Vector4D has no copy constructor
+		memcpy( this, &src, sizeof(mtexinfo_t) );
+	}
+};
+
+inline mtexinfo_t *MSurf_TexInfo( SurfaceHandle_t surfID, worldbrushdata_t *pData )
+{
+	return &pData->texinfo[surfID->texinfo];
+}
+
+#include <model_types.h>
+
+struct brushdata_t
+{
+	worldbrushdata_t	*pShared;
+	int				firstmodelsurface;
+	int				nummodelsurfaces;
+	
+	unsigned short	renderHandle;
+	unsigned short	firstnode;
+};
+
+class CEngineSprite;
+
+struct spritedata_t
+{
+	int				numframes;
+	int				width;
+	int				height;
+	CEngineSprite	*sprite;
+};
+
+#define	MAX_OSPATH		260
+
+struct model_t
+{
+	FileNameHandle_t	fnHandle;
+#if SOURCE_ENGINE == SE_TF2
+	CUtlString			strName;
+#elif SOURCE_ENGINE == SE_LEFT4DEAD2
+	char				szPathName[MAX_OSPATH];
+#endif
+	
+	int					nLoadFlags;		// mark loaded/not loaded
+	int					nServerCount;	// marked at load
+#if SOURCE_ENGINE == SE_TF2
+	IMaterial			**ppMaterials;	// null-terminated runtime material cache; ((intptr_t*)(ppMaterials))[-1] == nMaterials
+#endif
+	
+	modtype_t			type;
+	int					flags;			// MODELFLAG_???
+
+	// volume occupied by the model graphics	
+	Vector				mins, maxs;
+	float				radius;
+
+	union
+	{
+		brushdata_t		brush;
+		MDLHandle_t		studio;
+		spritedata_t	sprite;
+	};
+};
+
+const char *GetModelMaterialName(model_t *pModel, int idx)
+{
+	switch( modelinfo->GetModelType(pModel) )
+	{
+		case mod_brush:
+		{
+			if(!pModel->brush.pShared) {
+				return "";
+			}
+			
+			SurfaceHandle_t surfID = SurfaceHandleFromIndex( pModel->brush.firstmodelsurface + idx, pModel->brush.pShared );
+			
+			IMaterial *pMat = MSurf_TexInfo( surfID, pModel->brush.pShared )->material;
+			
+			return pMat->GetName();
+		}
+		case mod_studio:
+		{
+			studiohdr_t *pStudioHdr = mdlcache->GetStudioHdr( pModel->studio );
+			
+			const char *textureName = pStudioHdr->pTexture( idx )->pszName();
+			
+			return textureName;
+		}
+	}
+	
+	return "";
+}
+
+static cell_t Model_tGetMaterialName(IPluginContext *pContext, const cell_t *params)
+{
+	model_t *mod = (model_t *)params[1];
+	
+	const char *ptr = GetModelMaterialName(mod, params[2]);
+	
+	pContext->StringToLocal(params[3], params[4], ptr);
+	
+	return 0;
+}
+
+static cell_t ModelInfoGetModelIndex(IPluginContext *pContext, const cell_t *params)
+{
+	char *name = nullptr;
+	pContext->LocalToString(params[1], &name);
+	return modelinfo->GetModelIndex(name);
+}
+
+static cell_t ModelInfoGetModel(IPluginContext *pContext, const cell_t *params)
+{
+	return (cell_t)modelinfo->GetModel(params[1]);
+}
+
+#include <tier1/mempool.h>
+
+#if SOURCE_ENGINE == SE_TF2
+using CUtlMemoryPool = CMemoryPool;
+#endif
+
+class CModelLoader
+{
+public:
+	
+};
+
+CModelLoader *modelloader = nullptr;
+
+static cell_t ModelInfoNumWorldSubmodelsget(IPluginContext *pContext, const cell_t *params)
+{
+	const model_t *mod = modelinfo->GetModel(1);
+	
+	return mod->brush.pShared->numsubmodels;
+}
+
+static cell_t ModelInfoGetWorldSubmodelOrigin(IPluginContext *pContext, const cell_t *params)
+{
+	const model_t *mod = modelinfo->GetModel(1);
+	
+	return 0;
+}
+
+std::vector<dmodel_t> mapmodels{};
+
+template <typename T>
+void ReadMapLump(const char *mapname, int id, std::vector<T> &lumps)
+{
+	FileHandle_t maphndl = filesystem->Open(mapname, "r", "GAME");
+	
+	dheader_t header{};
+	filesystem->Read(&header, sizeof(dheader_t), maphndl);
+	
+	lump_t &mdllump = header.lumps[id];
+	
+	filesystem->Seek(maphndl, mdllump.fileofs, FILESYSTEM_SEEK_HEAD);
+	
+	unsigned nOffsetAlign, nSizeAlign, nBufferAlign;
+	bool bTryOptimal = filesystem->GetOptimalIOConstraints( maphndl, &nOffsetAlign, &nSizeAlign, &nBufferAlign );
+
+	if ( bTryOptimal )
+	{
+		bTryOptimal = ( mdllump.fileofs % 4 == 0 ); // Don't return badly aligned data
+	}
+
+	unsigned int alignedOffset = mdllump.fileofs;
+	unsigned int alignedBytesToRead = ( ( mdllump.filelen ) ? mdllump.filelen : 1 );
+
+	if ( bTryOptimal )
+	{
+		alignedOffset = AlignValue( ( alignedOffset - nOffsetAlign ) + 1, nOffsetAlign );
+		alignedBytesToRead = AlignValue( ( mdllump.fileofs - alignedOffset ) + alignedBytesToRead, nSizeAlign );
+	}
+
+	byte *rawdata = (byte *)filesystem->AllocOptimalReadBuffer( maphndl, alignedBytesToRead, alignedOffset );
+	
+	filesystem->Seek( maphndl, alignedOffset, FILESYSTEM_SEEK_HEAD );
+	filesystem->ReadEx( rawdata, alignedBytesToRead, alignedBytesToRead, maphndl );
+	
+	T *data = (T *)(rawdata + ( mdllump.fileofs - alignedOffset ));
+	
+	__asm__("int3");
+	
+	filesystem->FreeOptimalReadBuffer(rawdata);
+	
+	filesystem->Close(maphndl);
+}
+
+void Sample::OnCoreMapStart(edict_t *pEdictList, int edictCount, int clientMax)
+{
+	ActivityList_Free();
+	ActivityList_Init();
+	ActivityList_RegisterSharedActivities();
+
+	EventList_Free();
+	EventList_Init();
+	EventList_RegisterSharedEvents();
+	
+	mapmodels.clear();
+	
+	const model_t *mod = modelinfo->GetModel(1);
+	
+	char mapname[MAX_OSPATH];
+	filesystem->String(mod->fnHandle, mapname, sizeof(mapname));
+	
+	//ReadMapLump(mapname, LUMP_MODELS, mapmodels);
+}
+
 static const sp_nativeinfo_t g_sNativesInfo[] =
 {
 	{"BaseEntity.FireBullets", BaseEntityFireBullets},
 	{"BaseEntity.SetAbsOrigin", BaseEntitySetAbsOrigin},
 	{"BaseEntity.WorldSpaceCenter", BaseEntityWorldSpaceCenter},
-	{"BaseAnimating.SelectWeightedSequenceEx", BaseAnimatingSelectWeightedSequenceEx},
-	{"BaseAnimating.SelectHeaviestSequenceEx", BaseAnimatingSelectHeaviestSequenceEx},
+	{"BaseAnimating.SelectWeightedSequence", BaseAnimatingSelectWeightedSequenceEx},
+	{"BaseAnimating.SelectHeaviestSequence", BaseAnimatingSelectHeaviestSequenceEx},
 	{"BaseAnimating.LookupSequence", BaseAnimatingLookupSequence},
 	{"BaseAnimating.LookupActivity", BaseAnimatingLookupActivity},
 	{"BaseAnimating.LookupPoseParameter", BaseAnimatingLookupPoseParameter},
 	{"BaseAnimating.GetPoseParameterName", BaseAnimatingGetPoseParameterName},
 	{"BaseAnimating.GetAttachmentName", BaseAnimatingGetAttachmentName},
-	{"BaseAnimating.GetAttachmentBoneEx", BaseAnimatingGetAttachmentBone},
+	{"BaseAnimating.GetAttachmentBone", BaseAnimatingGetAttachmentBone},
 	{"BaseAnimating.GetBoneName", BaseAnimatingGetBoneName},
 	{"BaseAnimating.GetBodygroupName", BaseAnimatingGetBodygroupName},
 	{"BaseAnimating.GetSequenceActivityName", BaseAnimatingGetSequenceActivityName},
+	{"BaseAnimating.GetSequenceActivity", BaseAnimatingGetSequenceActivity},
 	{"BaseAnimating.GetSequenceName", BaseAnimatingGetSequenceName},
 	{"BaseFlex.GetFlexControllerName", BaseFlexGetFlexControllerName},
 	{"BaseAnimating.GetNumPoseParameters", BaseAnimatingGetNumPoseParameters},
@@ -3050,43 +3555,43 @@ static const sp_nativeinfo_t g_sNativesInfo[] =
 	{"BaseAnimating.GetNumBoneControllers", BaseAnimatingGetNumBoneControllers},
 	{"BaseAnimating.GetNumSequences", BaseAnimatingGetNumSequences},
 	{"BaseFlex.GetNumFlexControllers", BaseFlexGetNumFlexControllers},
-	{"BaseAnimating.SetPoseParameterEx", BaseAnimatingSetPoseParameter},
-	{"BaseAnimating.GetPoseParameterEx", BaseAnimatingGetPoseParameter},
+	{"BaseAnimating.SetPoseParameter", BaseAnimatingSetPoseParameter},
+	{"BaseAnimating.GetPoseParameter", BaseAnimatingGetPoseParameter},
 	{"BaseAnimating.StudioFrameAdvance", BaseAnimatingStudioFrameAdvance},
 	{"BaseAnimating.DispatchAnimEvents", BaseAnimatingDispatchAnimEvents},
 	{"BaseAnimating.ResetSequenceInfo", BaseAnimatingResetSequenceInfo},
 	{"BaseAnimating.LookupAttachment", BaseAnimatingLookupAttachment},
 	{"BaseAnimating.FindBodygroupByName", BaseAnimatingFindBodygroupByName},
 	{"BaseAnimating.GetAttachmentEx", BaseAnimatingGetAttachmentEx},
-	{"BaseAnimating.__GetAttachmentMatrixEx", BaseAnimatingGetAttachmentMatrixEx},
-	{"BaseAnimating.GetAttachmentLocalEx", BaseAnimatingGetAttachmentLocalEx},
+	{"BaseAnimating.__GetAttachmentMatrix", BaseAnimatingGetAttachmentMatrixEx},
+	{"BaseAnimating.GetAttachmentLocal", BaseAnimatingGetAttachmentLocalEx},
 	{"BaseAnimating.SetBodygroupEx", BaseAnimatingSetBodygroup},
 	{"BaseAnimating.LookupBone", BaseAnimatingLookupBone},
-	{"BaseAnimating.GetBonePositionEx", BaseAnimatingGetBonePositionEx},
-	{"BaseAnimating.SequenceDurationEx", BaseAnimatingSequenceDuration},
-	{"BaseAnimating.GetBoneControllerEx", BaseAnimatingGetBoneControllerEx},
-	{"BaseAnimating.SetBoneControllerEx", BaseAnimatingSetBoneControllerEx},
+	{"BaseAnimating.GetBonePosition", BaseAnimatingGetBonePositionEx},
+	{"BaseAnimating.SequenceDuration", BaseAnimatingSequenceDuration},
+	{"BaseAnimating.GetBoneController", BaseAnimatingGetBoneControllerEx},
+	{"BaseAnimating.SetBoneController", BaseAnimatingSetBoneControllerEx},
 	{"BaseAnimating.SetHandleAnimEvent", BaseAnimatingSetHandleAnimEvent},
 	{"BaseAnimating.GetIntervalMovement", BaseAnimatingGetIntervalMovement},
 	{"BaseAnimating.GetSequenceMovement", BaseAnimatingGetSequenceMovement},
 	{"BaseFlex.FindFlexController", BaseFlexFindFlexController},
-	{"BaseFlex.SetFlexWeightEx", BaseFlexSetFlexWeight},
-	{"BaseFlex.GetFlexWeightEx", BaseFlexGetFlexWeight},
-	{"BaseAnimatingOverlay.AddGestureSequenceEx1", BaseAnimatingOverlayAddGestureSequence},
-	{"BaseAnimatingOverlay.AddGestureSequenceEx2", BaseAnimatingOverlayAddGestureSequenceEx},
-	{"BaseAnimatingOverlay.AddGestureEx1", BaseAnimatingOverlayAddGesture},
-	{"BaseAnimatingOverlay.AddGestureEx2", BaseAnimatingOverlayAddGestureEx},
-	{"BaseAnimatingOverlay.IsPlayingGestureEx", BaseAnimatingOverlayIsPlayingGesture},
-	{"BaseAnimatingOverlay.RestartGestureEx", BaseAnimatingOverlayRestartGesture},
-	{"BaseAnimatingOverlay.RemoveGestureEx", BaseAnimatingOverlayRemoveGesture},
-	{"BaseAnimatingOverlay.AddLayeredSequenceEx", BaseAnimatingOverlayAddLayeredSequence},
+	{"BaseFlex.SetFlexWeight", BaseFlexSetFlexWeight},
+	{"BaseFlex.GetFlexWeight", BaseFlexGetFlexWeight},
+	{"BaseAnimatingOverlay.AddGestureSequence1", BaseAnimatingOverlayAddGestureSequence},
+	{"BaseAnimatingOverlay.AddGestureSequence2", BaseAnimatingOverlayAddGestureSequenceEx},
+	{"BaseAnimatingOverlay.AddGesture1", BaseAnimatingOverlayAddGesture},
+	{"BaseAnimatingOverlay.AddGesture2", BaseAnimatingOverlayAddGestureEx},
+	{"BaseAnimatingOverlay.IsPlayingGesture", BaseAnimatingOverlayIsPlayingGesture},
+	{"BaseAnimatingOverlay.RestartGesture", BaseAnimatingOverlayRestartGesture},
+	{"BaseAnimatingOverlay.RemoveGesture", BaseAnimatingOverlayRemoveGesture},
+	{"BaseAnimatingOverlay.AddLayeredSequence", BaseAnimatingOverlayAddLayeredSequence},
 	{"BaseAnimatingOverlay.RemoveAllGestures", BaseAnimatingOverlayRemoveAllGestures},
 	{"BaseAnimatingOverlay.SetLayerPriority", BaseAnimatingOverlaySetLayerPriority},
 	{"BaseAnimatingOverlay.IsValidLayer", BaseAnimatingOverlayIsValidLayer},
 	{"BaseAnimatingOverlay.SetLayerDuration", BaseAnimatingOverlaySetLayerDuration},
 	{"BaseAnimatingOverlay.GetLayerDuration", BaseAnimatingOverlayGetLayerDuration},
-	{"BaseAnimatingOverlay.SetLayerCycle", BaseAnimatingOverlaySetLayerCycle},
-	{"BaseAnimatingOverlay.SetLayerCycleEx", BaseAnimatingOverlaySetLayerCycleEx},
+	{"BaseAnimatingOverlay.SetLayerCycle1", BaseAnimatingOverlaySetLayerCycle},
+	{"BaseAnimatingOverlay.SetLayerCycle2", BaseAnimatingOverlaySetLayerCycleEx},
 	{"BaseAnimatingOverlay.GetLayerCycle", BaseAnimatingOverlayGetLayerCycle},
 	{"BaseAnimatingOverlay.SetLayerPlaybackRate", BaseAnimatingOverlaySetLayerPlaybackRate},
 	{"BaseAnimatingOverlay.SetLayerWeight", BaseAnimatingOverlaySetLayerWeight},
@@ -3111,25 +3616,27 @@ static const sp_nativeinfo_t g_sNativesInfo[] =
 	{"ActivityList_NameForIndex", ActivityList_NameForIndexNative},
 	{"EventList_IndexForName", EventList_IndexForNameNative},
 	{"EventList_NameForIndex", EventList_NameForIndexNative},
+	{"Model_t.Type.get", Model_tTypeget},
+	{"Model_t.GetName", Model_tGetName},
+	{"Model_t.GetBounds", Model_tGetBounds},
+	{"Model_t.GetRenderBounds", Model_tGetRenderBounds},
+	{"Model_t.Radius.get", Model_tRadiusget},
+	{"Model_t.MaterialCount.get", Model_tMaterialCountget},
+	{"Model_t.GetMaterialName", Model_tGetMaterialName},
+	{"ModelInfo.GetModelIndex", ModelInfoGetModelIndex},
+	{"ModelInfo.GetModel", ModelInfoGetModel},
+	{"ModelInfo.GetNumWorldSubmodels", ModelInfoNumWorldSubmodelsget},
+	{"ModelInfo.GetWorldSubmodelOrigin", ModelInfoGetWorldSubmodelOrigin},
 	{nullptr, nullptr},
 };
-
-void Sample::OnCoreMapStart(edict_t *pEdictList, int edictCount, int clientMax)
-{
-	ActivityList_Free();
-	ActivityList_Init();
-	ActivityList_RegisterSharedActivities();
-
-	EventList_Free();
-	EventList_Init();
-	EventList_RegisterSharedEvents();
-}
 
 bool Sample::SDK_OnMetamodLoad(ISmmAPI *ismm, char *error, size_t maxlen, bool late)
 {
 	gpGlobals = ismm->GetCGlobals();
 	GET_V_IFACE_CURRENT(GetEngineFactory, modelinfo, IVModelInfo, VMODELINFO_SERVER_INTERFACE_VERSION)
 	GET_V_IFACE_CURRENT(GetEngineFactory, filesystem, IFileSystem, FILESYSTEM_INTERFACE_VERSION)
+	GET_V_IFACE_CURRENT(GetEngineFactory, mdlcache, IMDLCache, MDLCACHE_INTERFACE_VERSION)
+	GET_V_IFACE_CURRENT(GetEngineFactory, materials, IMaterialSystem, MATERIAL_SYSTEM_INTERFACE_VERSION)
 	return true;
 }
 
@@ -3171,6 +3678,7 @@ bool Sample::SDK_OnLoad(char *error, size_t maxlen, bool late)
 	g_pGameConf->GetMemSig("CBaseAnimating::LockStudioHdr", &CBaseAnimatingLockStudioHdr);
 	g_pGameConf->GetMemSig("CBaseAnimating::CalcAbsolutePosition", &CBaseEntityCalcAbsolutePosition);
 	g_pGameConf->GetMemSig("CBaseEntity::SetAbsOrigin", &CBaseEntitySetAbsOrigin);
+	g_pGameConf->GetMemSig("modelloader", (void **)&modelloader);
 	
 	gameconfs->CloseGameConfigFile(g_pGameConf);
 	

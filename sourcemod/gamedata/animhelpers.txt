@@ -30,6 +30,11 @@
 				"library" "server"
 				"linux" "@_ZN11CBaseEntity20CalcAbsolutePositionEv"
 			}
+			"modelloader"
+			{
+				"library" "engine"
+				"linux" "@modelloader"
+			}
 		}
 	}
 	"left4dead2"

@@ -61,48 +61,14 @@ methodmap BaseAnimating < BaseEntity
 	public BaseAnimating(int entity) { return view_as<BaseAnimating>(entity); }
 
 	public native Activity LookupActivity(const char[] name);
-	public native int SelectWeightedSequenceEx(Activity activity);
-	public native int SelectHeaviestSequenceEx(Activity activity);
-	public int SelectWeightedSequence(const char[] name)
-	{
-		Activity id = this.LookupActivity(name);
-		if(id != ACT_INVALID) {
-			return this.SelectWeightedSequenceEx(id);
-		} else {
-			return -1;
-		}
-	}
-	public int SelectHeaviestSequence(const char[] name)
-	{
-		Activity id = this.LookupActivity(name);
-		if(id != ACT_INVALID) {
-			return this.SelectHeaviestSequenceEx(id);
-		} else {
-			return -1;
-		}
-	}
+	public native int SelectWeightedSequence(Activity activity);
+	public native int SelectHeaviestSequence(Activity activity);
 
 	public native int GetNumPoseParameters();
 	public native void GetPoseParameterName(int id, char[] name, int len);
 	public native int LookupPoseParameter(const char[] name);
-	public native void SetPoseParameterEx(int index, float value);
-	public native float GetPoseParameterEx(int index);
-	public void SetPoseParameter(const char[] name, float value)
-	{
-		int id = this.LookupPoseParameter(name);
-		if(id != -1) {
-			this.SetPoseParameterEx(id, value);
-		}
-	}
-	public float GetPoseParameter(const char[] name)
-	{
-		int id = this.LookupPoseParameter(name);
-		if(id != -1) {
-			return this.GetPoseParameterEx(id);
-		} else {
-			return 0.0;
-		}
-	}
+	public native void SetPoseParameter(int index, float value);
+	public native float GetPoseParameter(int index);
 	public native void StudioFrameAdvance();
 	public native void DispatchAnimEvents();
 	public native void ResetSequenceInfo();
@@ -110,13 +76,13 @@ methodmap BaseAnimating < BaseEntity
 	public native int GetNumAttachments();
 	public native void GetAttachmentName(int id, char[] name, int len);
 	public native int LookupAttachment(const char[] pAttachmentName);
-	public native int GetAttachmentBoneEx(int id);
-	public native bool GetAttachmentEx(int id, float absOrigin[3] = NULL_VECTOR, float absAngles[3] = NULL_VECTOR);
-	public native bool __GetAttachmentMatrixEx(int id, float matrix[3 * 4]);
-	public bool GetAttachmentMatrixEx(int id, float matrix[3][4])
+	public native int GetAttachmentBone(int id);
+	public native bool GetAttachment(int id, float absOrigin[3] = NULL_VECTOR, float absAngles[3] = NULL_VECTOR);
+	public native bool __GetAttachmentMatrix(int id, float matrix[3 * 4]);
+	public bool GetAttachmentMatrix(int id, float matrix[3][4])
 	{
 		float __matrix[3 * 4];
-		bool ret = this.__GetAttachmentMatrixEx(id, __matrix);
+		bool ret = this.__GetAttachmentMatrix(id, __matrix);
 
 		matrix[0][0] = __matrix[0];
 		matrix[0][1] = __matrix[1];
@@ -135,73 +101,28 @@ methodmap BaseAnimating < BaseEntity
 
 		return ret;
 	}
-	public native bool GetAttachmentLocalEx(int id, float absOrigin[3] = NULL_VECTOR, float absAngles[3] = NULL_VECTOR);
-	public bool GetAttachment(const char[] szName, float absOrigin[3] = NULL_VECTOR, float absAngles[3] = NULL_VECTOR)
-	{
-		int id = this.LookupAttachment(szName);
-		if(id != -1) {
-			return this.GetAttachmentEx(id, absOrigin, absAngles);
-		}
-		return false;
-	}
-	public bool GetAttachmentMatrix(const char[] szName, float matrix[3][4])
-	{
-		int id = this.LookupAttachment(szName);
-		if(id != -1) {
-			return this.GetAttachmentMatrixEx(id, matrix);
-		}
-		return false;
-	}
-	public bool GetAttachmentLocal(const char[] szName, float absOrigin[3] = NULL_VECTOR, float absAngles[3] = NULL_VECTOR)
-	{
-		int id = this.LookupAttachment(szName);
-		if(id != -1) {
-			return this.GetAttachmentLocalEx(id, absOrigin, absAngles);
-		}
-		return false;
-	}
-	public int GetAttachmentBone(const char[] szName)
-	{
-		int id = this.LookupAttachment(szName);
-		if(id != -1) {
-			return this.GetAttachmentBoneEx(id);
-		}
-		return -1;
-	}
+	public native bool GetAttachmentLocal(int id, float absOrigin[3] = NULL_VECTOR, float absAngles[3] = NULL_VECTOR);
 
 	public native int GetNumBones();
 	public native void GetBoneName(int id, char[] name, int len);
 	public native int LookupBone(const char[] name);
-	public native void GetBonePositionEx(int id, float absOrigin[3] = NULL_VECTOR, float absAngles[3] = NULL_VECTOR);
-	public void GetBonePosition(const char[] szName, float absOrigin[3] = NULL_VECTOR, float absAngles[3] = NULL_VECTOR)
-	{
-		int id = this.LookupBone(szName);
-		if(id != -1) {
-			this.GetBonePositionEx(id, absOrigin, absAngles);
-		}
-	}
+	public native void GetBonePosition(int id, float absOrigin[3] = NULL_VECTOR, float absAngles[3] = NULL_VECTOR);
 
 	public native int GetNumBodygroups();
 	public native void GetBodygroupName(int id, char[] name, int len);
 	public native int FindBodygroupByName(const char[] name);
-	public native void SetBodygroupEx(int iGroup, int iValue);
-	public void SetBodygroup(const char[] name, int iValue)
-	{
-		int id = this.FindBodygroupByName(name);
-		if(id != -1) {
-			this.SetBodygroupEx(id, iValue);
-		}
-	}
+	public native void SetBodygroup(int iGroup, int iValue);
 
 	public native int GetNumBoneControllers();
-	public native float GetBoneControllerEx(int id);
-	public native void SetBoneControllerEx(int id, float value);
+	public native float GetBoneController(int id);
+	public native void SetBoneController(int id, float value);
 
 	public native int GetNumSequences();
 	public native void GetSequenceName(int id, char[] name, int len);
 	public native void GetSequenceActivityName(int id, char[] name, int len);
+	public native Activity GetSequenceActivity(int seq);
 	public native int LookupSequence(const char[] name);
-	public void ResetSequenceEx(int sequence)
+	public void ResetSequence(int sequence)
 	{
 		int entity = view_as<int>(this);
 		int old = GetEntProp(entity, Prop_Send, "m_nSequence");
@@ -213,23 +134,7 @@ methodmap BaseAnimating < BaseEntity
 			this.ResetSequenceInfo();
 		}
 	}
-	public void ResetSequence(const char[] name)
-	{
-		int sequence = this.LookupSequence(name);
-		if(sequence != -1) {
-			this.ResetSequenceEx(sequence);
-		}
-	}
-	public native float SequenceDurationEx(int sequence);
-	public float SequenceDuration(const char[] name)
-	{
-		int id = this.LookupSequence(name);
-		if(id != -1) {
-			return this.SequenceDurationEx(id);
-		} else {
-			return 0.0;
-		}
-	}
+	public native float SequenceDuration(int sequence);
 
 	public native void SetHandleAnimEvent(BaseAnimatingFuncs funcs, any data = 0);
 
@@ -241,92 +146,22 @@ methodmap BaseAnimatingOverlay < BaseAnimating
 {
 	public BaseAnimatingOverlay(int entity) { return view_as<BaseAnimatingOverlay>(entity); }
 
-	public native int AddGestureSequenceEx1(int sequence, bool autokill=true);
-	public native int AddGestureSequenceEx2(int sequence, float flDuration, bool autokill=true);
-	public native int AddGestureEx1(Activity activity, bool autokill=true);
-	public native int AddGestureEx2(Activity activity, float flDuration, bool autokill=true);
-	public native bool IsPlayingGestureEx(Activity activity);
-	public native void RestartGestureEx(Activity activity, bool addifmissing=true, bool autokill=true);
-	public native void RemoveGestureEx(Activity activity);
-	public native int AddLayeredSequenceEx(int sequence, int iPriority);
-
-	public int AddGestureSequence1(const char[] name, bool autokill=true)
-	{
-		int id = this.LookupSequence(name);
-		if(id != -1) {
-			return this.AddGestureSequenceEx1(id, autokill);
-		} else {
-			return -1;
-		}
-	}
-	public int AddGestureSequence2(const char[] name, float flDuration, bool autokill=true)
-	{
-		int id = this.LookupSequence(name);
-		if(id != -1) {
-			return this.AddGestureSequenceEx2(id, flDuration, autokill);
-		} else {
-			return -1;
-		}
-	}
-	public int AddLayeredSequence(const char[] name, int iPriority)
-	{
-		int id = this.LookupSequence(name);
-		if(id != -1) {
-			return this.AddLayeredSequenceEx(id, iPriority);
-		} else {
-			return -1;
-		}
-	}
-
-	public int AddGesture1(const char[] name, bool autokill=true)
-	{
-		Activity id = this.LookupActivity(name);
-		if(id != ACT_INVALID) {
-			return this.AddGestureEx1(id, autokill);
-		} else {
-			return -1;
-		}
-	}
-	public int AddGesture2(const char[] name, float flDuration, bool autokill=true)
-	{
-		Activity id = this.LookupActivity(name);
-		if(id != ACT_INVALID) {
-			return this.AddGestureEx2(id, flDuration, autokill);
-		} else {
-			return -1;
-		}
-	}
-	public bool IsPlayingGesture(const char[] name)
-	{
-		Activity id = this.LookupActivity(name);
-		if(id != ACT_INVALID) {
-			return this.IsPlayingGestureEx(id);
-		} else {
-			return false;
-		}
-	}
-	public void RemoveGesture(const char[] name)
-	{
-		Activity id = this.LookupActivity(name);
-		if(id != ACT_INVALID) {
-			this.RemoveGestureEx(id);
-		}
-	}
-	public void RestartGesture(const char[] name, bool addifmissing=true, bool autokill=true)
-	{
-		Activity id = this.LookupActivity(name);
-		if(id != ACT_INVALID) {
-			this.RestartGestureEx(id, addifmissing, autokill);
-		}
-	}
+	public native int AddGestureSequence1(int sequence, bool autokill=true);
+	public native int AddGestureSequence2(int sequence, float flDuration, bool autokill=true);
+	public native int AddGesture1(Activity activity, bool autokill=true);
+	public native int AddGesture2(Activity activity, float flDuration, bool autokill=true);
+	public native bool IsPlayingGesture(Activity activity);
+	public native void RestartGesture(Activity activity, bool addifmissing=true, bool autokill=true);
+	public native void RemoveGesture(Activity activity);
+	public native int AddLayeredSequence(int sequence, int iPriority);
 
 	public native void RemoveAllGestures();
 	public native void SetLayerPriority(int iLayer, int iPriority);
 	public native bool IsValidLayer(int iLayer);
 	public native void SetLayerDuration(int iLayer, float flDuration);
 	public native float GetLayerDuration(int iLayer);
-	public native void SetLayerCycle(int iLayer, float flCycle);
-	public native void SetLayerCycleEx(int iLayer, float flCycle, float flPrevCycle);
+	public native void SetLayerCycle1(int iLayer, float flCycle);
+	public native void SetLayerCycle2(int iLayer, float flCycle, float flPrevCycle);
 	public native float GetLayerCycle(int iLayer);
 	public native void SetLayerPlaybackRate(int iLayer, float flPlaybackRate);
 	public native void SetLayerWeight(int iLayer, float flWeight);
@@ -356,24 +191,8 @@ methodmap BaseFlex < BaseAnimatingOverlay
 	public native int GetNumFlexControllers();
 	public native void GetFlexControllerName(int id, char[] name, int len);
 	public native int FindFlexController(const char[] name);
-	public native void SetFlexWeightEx(int id, float value);
-	public native float GetFlexWeightEx(int id);
-	public void SetFlexWeight(const char[] name, float value)
-	{
-		int id = this.FindFlexController(name);
-		if(id != -1) {
-			this.SetFlexWeightEx(id, value);
-		}
-	}
-	public float GetFlexWeight(const char[] name)
-	{
-		int id = this.FindFlexController(name);
-		if(id != -1) {
-			return this.GetFlexWeightEx(id);
-		} else {
-			return 0.0;
-		}
-	}
+	public native void SetFlexWeight(int id, float value);
+	public native float GetFlexWeight(int id);
 };
 
 native Activity ActivityList_IndexForName(const char[] name);
@@ -385,6 +204,59 @@ native void EventList_NameForIndex(int id, char[] name, int len);
 stock bool EntityIsAnimating(int entity) { return HasEntProp(entity, Prop_Send, "m_nSequence"); }
 stock bool EntityIsAnimatingOverlay(int entity) { return HasEntProp(entity, Prop_Data, "m_AnimOverlay"); }
 stock bool EntityIsFlex(int entity) { return HasEntProp(entity, Prop_Send, "m_flexWeight"); }
+
+enum model_type_t
+{
+	model_bad, 
+	model_brush, 
+	model_sprite, 
+	model_studio
+};
+
+methodmap Model_t
+{
+	property model_type_t Type
+	{
+		public native get();
+	}
+
+	public native void GetName(char[] name, int length);
+	public native void GetBounds(float mins[3], float maxs[3]);
+	public native void GetRenderBounds(float mins[3], float maxs[3]);
+
+	property float Radius
+	{
+		public native get();
+	}
+
+	property int MaterialCount
+	{
+		public native get();
+	}
+
+	public native void GetMaterialName(int idx, char[] name, int len);
+};
+
+#define Model_Null (view_as<Model_t>(Address_Null))
+
+methodmap ModelInfo
+{
+	public static native int GetModelIndex(const char[] name);
+	public static native Model_t GetModel(int idx);
+
+	public static int GetNumModels()
+	{
+		static int table = INVALID_STRING_TABLE;
+		if(table == INVALID_STRING_TABLE) {
+			table = FindStringTable("modelprecache");
+		}
+		return GetStringTableNumStrings(table);
+	}
+
+	public static native int GetNumWorldSubmodels();
+
+	public static native void GetWorldSubmodelOrigin(int idx, float vec[3]);
+};
 
 #if !defined REQUIRE_EXTENSIONS
 public void __ext_animhelpers_SetNTVOptional()
