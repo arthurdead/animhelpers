@@ -67,6 +67,7 @@ class IStaticPropMgrServer *staticpropmgr = nullptr;
 #include <bspfile.h>
 
 #include <unordered_map>
+#include <vector>
 #include <IForwardSys.h>
 
 extern int g_nActivityListVersion;
