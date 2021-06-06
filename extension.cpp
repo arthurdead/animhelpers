@@ -1610,7 +1610,7 @@ float CBaseAnimating::GetPoseParameter(int index)
 	if(!pStudioHdr->SequencesAvailable())
 		return 0.0f;
 
-	if(index <= 0 || index >= pStudioHdr->GetNumPoseParameters())
+	if(index < 0 || index >= pStudioHdr->GetNumPoseParameters())
 		return 0.0f;
 
 	return Studio_GetPoseParameter(pStudioHdr, index, GetPoseParameterArray()[index]);
@@ -1626,7 +1626,7 @@ void CBaseAnimating::SetPoseParameter(int index, float value)
 	if(!pStudioHdr->SequencesAvailable())
 		return;
 
-	if(index <= 0 || index >= pStudioHdr->GetNumPoseParameters())
+	if(index < 0 || index >= pStudioHdr->GetNumPoseParameters())
 		return;
 	
 	float flNewValue = 0.0f;
@@ -1666,7 +1666,7 @@ int CBaseAnimating::SelectWeightedSequence(int activity, int sequence)
 	if(sequence >= pStudioHdr->GetNumSeq() || sequence < 0)
 		return -1;
 	
-	if(activity <= 0)
+	if(activity < 0)
 		return -1;
 
 	return ::SelectWeightedSequence(pStudioHdr, activity, sequence);
@@ -1686,7 +1686,7 @@ int CBaseAnimating::SelectWeightedSequence(int activity)
 	if(sequence >= pStudioHdr->GetNumSeq() || sequence < 0)
 		return -1;
 	
-	if(activity <= 0)
+	if(activity < 0)
 		return -1;
 
 	return ::SelectWeightedSequence(pStudioHdr, activity, sequence);
