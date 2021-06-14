@@ -122,13 +122,13 @@ methodmap BaseAnimating < BaseEntity
 	public native void GetSequenceActivityName(int id, char[] name, int len);
 	public native Activity GetSequenceActivity(int seq);
 	public native int LookupSequence(const char[] name);
-	public void ResetSequence(int sequence)
+	public void ResetSequence(int sequence, bool force = false)
 	{
 		int entity = view_as<int>(this);
 		int old = GetEntProp(entity, Prop_Send, "m_nSequence");
 		bool changed = (old != sequence);
 		SetEntProp(entity, Prop_Send, "m_nSequence", sequence);
-		if(changed) {
+		if(force || changed) {
 			SetEntPropFloat(entity, Prop_Data, "m_flAnimTime", GetGameTime());
 			SetEntPropFloat(entity, Prop_Send, "m_flCycle", 0.0);
 			this.ResetSequenceInfo();
