@@ -89,23 +89,23 @@
 			}
 			"CBaseAnimating::GetBoneTransform"
 			{
-				"linux" "203"
+				"linux" "204"
 			}
 			"CBaseAnimating::GetAttachment"
 			{
-				"linux" "209"
+				"linux" "210"
 			}
 			"CBaseAnimating::StudioFrameAdvance"
 			{
-				"linux" "194"
+				"linux" "195"
 			}
 			"CBaseAnimating::DispatchAnimEvents"
 			{
-				"linux" "206"
+				"linux" "207"
 			}
 			"CBaseAnimating::HandleAnimEvent"
 			{
-				"linux" "207"
+				"linux" "208"
 			}
 			"CBaseAnimating::m_pStudioHdr"
 			{
