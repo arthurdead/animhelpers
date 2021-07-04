@@ -3563,7 +3563,7 @@ static const sp_nativeinfo_t g_sNativesInfo[] =
 	{"BaseAnimating.ResetSequenceInfo", BaseAnimatingResetSequenceInfo},
 	{"BaseAnimating.LookupAttachment", BaseAnimatingLookupAttachment},
 	{"BaseAnimating.FindBodygroupByName", BaseAnimatingFindBodygroupByName},
-	{"BaseAnimating.GetAttachmentEx", BaseAnimatingGetAttachmentEx},
+	{"BaseAnimating.GetAttachment", BaseAnimatingGetAttachmentEx},
 	{"BaseAnimating.__GetAttachmentMatrix", BaseAnimatingGetAttachmentMatrixEx},
 	{"BaseAnimating.GetAttachmentLocal", BaseAnimatingGetAttachmentLocalEx},
 	{"BaseAnimating.SetBodygroupEx", BaseAnimatingSetBodygroup},
