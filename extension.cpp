@@ -2878,6 +2878,7 @@ struct callback_holder_t
 	IPluginContext *pContext = nullptr;
 	IdentityToken_t *owner = nullptr;
 	bool erase = true;
+	int ref = -1;
 	
 	callback_holder_t(CBaseEntity *pEntity, IPluginContext *pContext_);
 	~callback_holder_t();
@@ -2891,14 +2892,24 @@ struct callback_holder_t
 			SH_ADD_MANUALHOOK(HandleAnimEvent, pEntity, SH_MEMBER(this, &callback_holder_t::HookHandleAnimEvent), false);
 		}
 	}
-	
-	void dtor(CBaseEntity *pEntity)
+
+	void remove_hooks(CBaseEntity *pEntity)
 	{
 		SH_REMOVE_MANUALHOOK(GenericDtor, pEntity, SH_MEMBER(this, &callback_holder_t::HookEntityDtor), false);
 		
 		if(callback) {
 			SH_REMOVE_MANUALHOOK(HandleAnimEvent, pEntity, SH_MEMBER(this, &callback_holder_t::HookHandleAnimEvent), false);
 		}
+	}
+
+	void remove_hooks()
+	{
+		remove_hooks(pEntity_);
+	}
+	
+	void dtor(CBaseEntity *pEntity)
+	{
+		remove_hooks(pEntity);
 		
 		delete this;
 	}
@@ -2941,21 +2952,23 @@ struct callback_holder_t
 	}
 };
 
-using callback_holder_map_t = std::unordered_map<CBaseEntity *, callback_holder_t *>;
+using callback_holder_map_t = std::unordered_map<int, callback_holder_t *>;
 callback_holder_map_t callbackmap{};
 
 callback_holder_t::callback_holder_t(CBaseEntity *pEntity, IPluginContext *pContext_)
-	: pEntity_{pEntity}, pContext{pContext_}, owner{pContext_->GetIdentity()}
+	: pEntity_{pEntity}, pContext{pContext_}, owner{pContext_->GetIdentity()}, ref{gamehelpers->EntityToBCompatRef(pEntity)}
 {
 	SH_ADD_MANUALHOOK(GenericDtor, pEntity_, SH_MEMBER(this, &callback_holder_t::HookEntityDtor), false);
-	
-	callbackmap[pEntity_] = this;
+
+	callbackmap[ref] = this;
 }
 
 callback_holder_t::~callback_holder_t()
 {
+	remove_hooks();
+
 	if(erase) {
-		callbackmap.erase(pEntity_);
+		callbackmap.erase(ref);
 	}
 }
 
@@ -2967,8 +2980,10 @@ static cell_t BaseAnimatingSetHandleAnimEvent(IPluginContext *pContext, const ce
 	}
 	
 	callback_holder_t *holder = nullptr;
+
+	int ref = gamehelpers->EntityToBCompatRef(pEntity);
 	
-	callback_holder_map_t::iterator it{callbackmap.find(pEntity)};
+	callback_holder_map_t::iterator it{callbackmap.find(ref)};
 	if(it != callbackmap.end()) {
 		holder = it->second;
 	} else {
@@ -3646,9 +3661,8 @@ void Sample::OnPluginUnloaded(IPlugin *plugin)
 	callback_holder_map_t::iterator it{callbackmap.begin()};
 	while(it != callbackmap.end()) {
 		if(it->second->owner == plugin->GetIdentity()) {
-			it->second->erase = false;
+			delete it->second;
 			callbackmap.erase(it);
-			it->second->dtor(it->second->pEntity_);
 			continue;
 		}
 		

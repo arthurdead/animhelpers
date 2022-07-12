@@ -81,31 +81,31 @@
 		{
 			"CBaseEntity::WorldSpaceCenter"
 			{
-				"linux" "150"
+				"linux" "153"
 			}
 			"CBaseEntity::FireBullets"
 			{
-				"linux" "113"
+				"linux" "116"
 			}
 			"CBaseAnimating::GetBoneTransform"
 			{
-				"linux" "204"
+				"linux" "207"
 			}
 			"CBaseAnimating::GetAttachment"
 			{
-				"linux" "210"
+				"linux" "213"
 			}
 			"CBaseAnimating::StudioFrameAdvance"
 			{
-				"linux" "195"
+				"linux" "198"
 			}
 			"CBaseAnimating::DispatchAnimEvents"
 			{
-				"linux" "207"
+				"linux" "210"
 			}
 			"CBaseAnimating::HandleAnimEvent"
 			{
-				"linux" "208"
+				"linux" "211"
 			}
 			"CBaseAnimating::m_pStudioHdr"
 			{
