@@ -496,10 +496,14 @@ public:
 	bool GetAttachmentLocal( const char *szName, Vector &origin, QAngle &angles );
 	bool GetAttachmentLocal( int iAttachment, Vector &origin, QAngle &angles );
 	bool GetAttachmentLocal( int iAttachment, matrix3x4_t &attachmentToLocal );
+
+	bool GetBonePositionLocal( const char *szName, Vector &origin, QAngle &angles );
+	bool GetBonePositionLocal( int iAttachment, Vector &origin, QAngle &angles );
+	bool GetBonePositionLocal( int iAttachment, matrix3x4_t &attachmentToLocal );
 	
 	void SetBodygroup( int iGroup, int iValue );
 	
-	void GetBonePosition ( int iBone, Vector &origin, QAngle &angles );
+	bool GetBonePosition ( int iBone, Vector &origin, QAngle &angles );
 	int LookupBone( const char *szName );
 	int LookupAttachment( const char *szName );
 	int SelectWeightedSequence(int activity);
@@ -682,6 +686,11 @@ bool CBaseAnimating::GetAttachmentLocal( const char *szName, Vector &origin, QAn
 	return GetAttachmentLocal( LookupAttachment( szName ), origin, angles );
 }
 
+bool CBaseAnimating::GetBonePositionLocal( const char *szName, Vector &origin, QAngle &angles )
+{
+	return GetBonePositionLocal( LookupBone( szName ), origin, angles );
+}
+
 bool CBaseAnimating::GetAttachmentLocal( int iAttachment, Vector &origin, QAngle &angles )
 {
 	matrix3x4_t attachmentToEntity;
@@ -691,10 +700,29 @@ bool CBaseAnimating::GetAttachmentLocal( int iAttachment, Vector &origin, QAngle
 	return bRet;
 }
 
+bool CBaseAnimating::GetBonePositionLocal( int iAttachment, Vector &origin, QAngle &angles )
+{
+	matrix3x4_t attachmentToEntity;
+
+	bool bRet = GetBonePositionLocal( iAttachment, attachmentToEntity );
+	MatrixAngles( attachmentToEntity, angles, origin );
+	return bRet;
+}
+
 bool CBaseAnimating::GetAttachmentLocal( int iAttachment, matrix3x4_t &attachmentToLocal )
 {
 	matrix3x4_t attachmentToWorld;
 	bool bRet = GetAttachment(iAttachment, attachmentToWorld);
+	matrix3x4_t worldToEntity;
+	MatrixInvert( EntityToWorldTransform(), worldToEntity );
+	ConcatTransforms( worldToEntity, attachmentToWorld, attachmentToLocal ); 
+	return bRet;
+}
+
+bool CBaseAnimating::GetBonePositionLocal( int iAttachment, matrix3x4_t &attachmentToLocal )
+{
+	matrix3x4_t attachmentToWorld;
+	bool bRet = GetBoneTransform(iAttachment, attachmentToWorld);
 	matrix3x4_t worldToEntity;
 	MatrixInvert( EntityToWorldTransform(), worldToEntity );
 	ConcatTransforms( worldToEntity, attachmentToWorld, attachmentToLocal ); 
@@ -904,21 +932,23 @@ float CBaseAnimating::GetBoneController ( int iController )
 	return Studio_GetController( pmodel, iController, GetEncodedControllerArray()[iController] );
 }
 
-void CBaseAnimating::GetBonePosition ( int iBone, Vector &origin, QAngle &angles )
+bool CBaseAnimating::GetBonePosition ( int iBone, Vector &origin, QAngle &angles )
 {
 	CStudioHdr *pStudioHdr = GetModelPtr( );
 	if (!pStudioHdr)
 	{
-		return;
+		return false;
 	}
 
 	if (iBone < 0 || iBone >= pStudioHdr->numbones())
 	{
-		return;
+		return false;
 	}
 
 	matrix3x4_t bonetoworld;
-	GetBoneTransform( iBone, bonetoworld );
+	if(!GetBoneTransform( iBone, bonetoworld )) {
+		return false;
+	}
 	
 	MatrixAngles( bonetoworld, angles, origin );
 }
@@ -2506,7 +2536,7 @@ static cell_t BaseAnimatingGetAttachmentLocalEx(IPluginContext *pContext, const 
 	return ret;
 }
 
-static cell_t BaseAnimatingGetBonePositionEx(IPluginContext *pContext, const cell_t *params)
+static cell_t BaseAnimatingGetBonePositionLocalEx(IPluginContext *pContext, const cell_t *params)
 {
 	CBaseAnimating *pEntity = (CBaseAnimating *)gamehelpers->ReferenceToEntity(params[1]);
 	if(!pEntity) {
@@ -2517,7 +2547,7 @@ static cell_t BaseAnimatingGetBonePositionEx(IPluginContext *pContext, const cel
 	
 	Vector origin{};
 	QAngle angles{};
-	pEntity->GetBonePosition(params[2], origin, angles);
+	bool ret = pEntity->GetBonePositionLocal(params[2], origin, angles);
 	
 	cell_t *addr = nullptr;
 	pContext->LocalToPhysAddr(params[3], &addr);
@@ -2536,7 +2566,40 @@ static cell_t BaseAnimatingGetBonePositionEx(IPluginContext *pContext, const cel
 		addr[2] = sp_ftoc(angles.z);
 	}
 	
-	return 0;
+	return ret;
+}
+
+static cell_t BaseAnimatingGetBonePositionEx(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseAnimating *pEntity = (CBaseAnimating *)gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+
+	cell_t *pNullVec = pContext->GetNullRef(SP_NULL_VECTOR);
+	
+	Vector origin{};
+	QAngle angles{};
+	bool ret = pEntity->GetBonePosition(params[2], origin, angles);
+	
+	cell_t *addr = nullptr;
+	pContext->LocalToPhysAddr(params[3], &addr);
+	
+	if(addr != pNullVec) {
+		addr[0] = sp_ftoc(origin.x);
+		addr[1] = sp_ftoc(origin.y);
+		addr[2] = sp_ftoc(origin.z);
+	}
+	
+	pContext->LocalToPhysAddr(params[4], &addr);
+	
+	if(addr != pNullVec) {
+		addr[0] = sp_ftoc(angles.x);
+		addr[1] = sp_ftoc(angles.y);
+		addr[2] = sp_ftoc(angles.z);
+	}
+	
+	return ret;
 }
 
 static cell_t BaseAnimatingSequenceDuration(IPluginContext *pContext, const cell_t *params)
@@ -3584,6 +3647,7 @@ static const sp_nativeinfo_t g_sNativesInfo[] =
 	{"BaseAnimating.SetBodygroupEx", BaseAnimatingSetBodygroup},
 	{"BaseAnimating.LookupBone", BaseAnimatingLookupBone},
 	{"BaseAnimating.GetBonePosition", BaseAnimatingGetBonePositionEx},
+	{"BaseAnimating.GetBonePositionLocal", BaseAnimatingGetBonePositionLocalEx},
 	{"BaseAnimating.SequenceDuration", BaseAnimatingSequenceDuration},
 	{"BaseAnimating.GetBoneController", BaseAnimatingGetBoneControllerEx},
 	{"BaseAnimating.SetBoneController", BaseAnimatingSetBoneControllerEx},
@@ -3691,7 +3755,7 @@ bool Sample::SDK_OnLoad(char *error, size_t maxlen, bool late)
 	
 	g_pGameConf->GetMemSig("CBaseAnimating::ResetSequenceInfo", &CBaseAnimatingResetSequenceInfo);
 	g_pGameConf->GetMemSig("CBaseAnimating::LockStudioHdr", &CBaseAnimatingLockStudioHdr);
-	g_pGameConf->GetMemSig("CBaseAnimating::CalcAbsolutePosition", &CBaseEntityCalcAbsolutePosition);
+	g_pGameConf->GetMemSig("CBaseEntity::CalcAbsolutePosition", &CBaseEntityCalcAbsolutePosition);
 	g_pGameConf->GetMemSig("CBaseEntity::SetAbsOrigin", &CBaseEntitySetAbsOrigin);
 	g_pGameConf->GetMemSig("modelloader", (void **)&modelloader);
 	

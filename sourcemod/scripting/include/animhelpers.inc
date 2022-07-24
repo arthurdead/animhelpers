@@ -78,6 +78,8 @@ methodmap BaseAnimating < BaseEntity
 	public native int LookupAttachment(const char[] pAttachmentName);
 	public native int GetAttachmentBone(int id);
 	public native bool GetAttachment(int id, float absOrigin[3] = NULL_VECTOR, float absAngles[3] = NULL_VECTOR);
+	public native bool GetAttachmentLocal(int id, float absOrigin[3] = NULL_VECTOR, float absAngles[3] = NULL_VECTOR);
+
 	public native bool __GetAttachmentMatrix(int id, float matrix[3 * 4]);
 	public bool GetAttachmentMatrix(int id, float matrix[3][4])
 	{
@@ -101,12 +103,12 @@ methodmap BaseAnimating < BaseEntity
 
 		return ret;
 	}
-	public native bool GetAttachmentLocal(int id, float absOrigin[3] = NULL_VECTOR, float absAngles[3] = NULL_VECTOR);
 
 	public native int GetNumBones();
 	public native void GetBoneName(int id, char[] name, int len);
 	public native int LookupBone(const char[] name);
-	public native void GetBonePosition(int id, float absOrigin[3] = NULL_VECTOR, float absAngles[3] = NULL_VECTOR);
+	public native bool GetBonePosition(int id, float absOrigin[3] = NULL_VECTOR, float absAngles[3] = NULL_VECTOR);
+	public native bool GetBonePositionLocal(int id, float absOrigin[3] = NULL_VECTOR, float absAngles[3] = NULL_VECTOR);
 
 	public native int GetNumBodygroups();
 	public native void GetBodygroupName(int id, char[] name, int len);
@@ -181,7 +183,7 @@ methodmap BaseAnimatingOverlay < BaseAnimating
 	public native void VerifyOrder();
 	public native bool HasActiveLayer();
 	public native int AllocateLayer(int iPriority=0);
-	public static native int MaxOverlays()
+	public static native int MaxOverlays();
 };
 
 methodmap BaseFlex < BaseAnimatingOverlay
