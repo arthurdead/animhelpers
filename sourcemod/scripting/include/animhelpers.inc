@@ -3,6 +3,8 @@
 #endif
 #define animhelpers_included
 
+#include <sdktools>
+
 #include <animhelpers_activity>
 #include <animhelpers_eventlist>
 
