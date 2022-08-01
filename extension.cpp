@@ -516,6 +516,10 @@ public:
 	float SequenceDuration(int sequence);
 	float SequenceDuration( CStudioHdr *pStudioHdr, int sequence);
 	int GetSequenceFlags(int sequence);
+
+	int SequenceNumFrames(int sequence);
+	float SequenceFPS(int sequence);
+	float SequenceCPS(int sequence);
 	
 	void SetBoneController ( int iController, float flValue );
 	float GetBoneController ( int iController );
@@ -1024,6 +1028,56 @@ float CBaseAnimating::SequenceDuration(int sequence)
 	CStudioHdr *pStudioHdr = GetModelPtr();
 
 	return SequenceDuration(pStudioHdr, sequence);
+}
+
+int CBaseAnimating::SequenceNumFrames(int sequence)
+{
+	CStudioHdr *pStudioHdr = GetModelPtr();
+
+	if(!pStudioHdr)
+		return 0;
+
+	if(!pStudioHdr->SequencesAvailable())
+		return 0;
+
+	if(sequence >= pStudioHdr->GetNumSeq() || sequence < 0)
+		return 0;
+
+	return Studio_MaxFrame(pStudioHdr, sequence, GetPoseParameterArray());
+}
+
+float CBaseAnimating::SequenceFPS(int sequence)
+{
+	CStudioHdr *pStudioHdr = GetModelPtr();
+
+	if(!pStudioHdr)
+		return 0.1f;
+
+	if(!pStudioHdr->SequencesAvailable())
+		return 0.1f;
+
+	if(sequence >= pStudioHdr->GetNumSeq() || sequence < 0)
+		return 0.1f;
+
+	return Studio_FPS(pStudioHdr, sequence, GetPoseParameterArray());
+}
+
+float CBaseAnimating::SequenceCPS(int sequence)
+{
+	CStudioHdr *pStudioHdr = GetModelPtr();
+
+	if(!pStudioHdr)
+		return 0.1f;
+
+	if(!pStudioHdr->SequencesAvailable())
+		return 0.1f;
+
+	if(sequence >= pStudioHdr->GetNumSeq() || sequence < 0)
+		return 0.1f;
+
+	mstudioseqdesc_t &seqdesc = ((CStudioHdr *)pStudioHdr)->pSeqdesc( sequence );
+
+	return Studio_CPS(pStudioHdr, seqdesc, sequence, GetPoseParameterArray());
 }
 
 class CBaseAnimatingOverlay;
@@ -2612,6 +2666,36 @@ static cell_t BaseAnimatingSequenceDuration(IPluginContext *pContext, const cell
 	return sp_ftoc(pEntity->SequenceDuration(params[2]));
 }
 
+static cell_t BaseAnimatingSequenceNumFrames(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseAnimating *pEntity = (CBaseAnimating *)gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+	
+	return pEntity->SequenceNumFrames(params[2]);
+}
+
+static cell_t BaseAnimatingSequenceCPS(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseAnimating *pEntity = (CBaseAnimating *)gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+	
+	return sp_ftoc(pEntity->SequenceCPS(params[2]));
+}
+
+static cell_t BaseAnimatingSequenceFPS(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseAnimating *pEntity = (CBaseAnimating *)gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+	
+	return sp_ftoc(pEntity->SequenceFPS(params[2]));
+}
+
 static cell_t BaseAnimatingSetBodygroup(IPluginContext *pContext, const cell_t *params)
 {
 	CBaseAnimating *pEntity = (CBaseAnimating *)gamehelpers->ReferenceToEntity(params[1]);
@@ -3649,6 +3733,9 @@ static const sp_nativeinfo_t g_sNativesInfo[] =
 	{"BaseAnimating.GetBonePosition", BaseAnimatingGetBonePositionEx},
 	{"BaseAnimating.GetBonePositionLocal", BaseAnimatingGetBonePositionLocalEx},
 	{"BaseAnimating.SequenceDuration", BaseAnimatingSequenceDuration},
+	{"BaseAnimating.SequenceNumFrames", BaseAnimatingSequenceNumFrames},
+	{"BaseAnimating.SequenceFPS", BaseAnimatingSequenceFPS},
+	{"BaseAnimating.SequenceCPS", BaseAnimatingSequenceCPS},
 	{"BaseAnimating.GetBoneController", BaseAnimatingGetBoneControllerEx},
 	{"BaseAnimating.SetBoneController", BaseAnimatingSetBoneControllerEx},
 	{"BaseAnimating.SetHandleAnimEvent", BaseAnimatingSetHandleAnimEvent},

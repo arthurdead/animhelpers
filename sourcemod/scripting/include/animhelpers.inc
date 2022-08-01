@@ -139,6 +139,19 @@ methodmap BaseAnimating < BaseEntity
 		}
 	}
 	public native float SequenceDuration(int sequence);
+	public native int SequenceNumFrames(int sequence);
+	public native float SequenceFPS(int sequence);
+	public native float SequenceCPS(int sequence);
+	public int SequenceFrame()
+	{
+		int entity = view_as<int>(this);
+
+		int sequence = GetEntProp(entity, Prop_Send, "m_nSequence");
+		int num_frames = this.SequenceNumFrames(sequence);
+
+		float cycle = GetEntPropFloat(entity, Prop_Send, "m_flCycle");
+		return RoundToFloor((cycle * float(num_frames)) / 1.0);
+	}
 
 	public native void SetHandleAnimEvent(BaseAnimatingFuncs funcs, any data = 0);
 
