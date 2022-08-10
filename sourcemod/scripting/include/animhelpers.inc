@@ -47,16 +47,12 @@ enum struct FireBulletsInfo_t
 methodmap BaseEntity
 {
 	public BaseEntity(int entity) { return view_as<BaseEntity>(entity); }
-	public native void FireBullets(FireBulletsInfo_tVar info);
+	public native void FireBullets(const FireBulletsInfo_tVar info);
 	public native void WorldSpaceCenter(float center[3]);
-	public native void SetAbsOrigin(float pos[3]);
+	public native void SetAbsOrigin(const float pos[3]);
 }
 
-typeset BaseAnimatingFuncs
-{
-	//SetHandleAnimEvent
-	function Action (BaseAnimating anim, animevent_t event, any data);
-};
+typedef handleanimevent_func_t = function Action (BaseAnimating anim, animevent_t event, any data);
 
 methodmap BaseAnimating < BaseEntity
 {
@@ -153,7 +149,7 @@ methodmap BaseAnimating < BaseEntity
 		return RoundToFloor((cycle * float(num_frames)) / 1.0);
 	}
 
-	public native void SetHandleAnimEvent(BaseAnimatingFuncs funcs, any data = 0);
+	public native void SetHandleAnimEvent(handleanimevent_func_t func, any data = 0);
 
 	public native bool GetIntervalMovement(bool &bMoveSeqFinished = false, float pos[3] = NULL_VECTOR, float ang[3] = NULL_VECTOR);
 	public native bool GetSequenceMovement(bool &bMoveSeqFinished = false, float pos[3] = NULL_VECTOR, float ang[3] = NULL_VECTOR);
