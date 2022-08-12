@@ -8,46 +8,9 @@
 #include <animhelpers_activity>
 #include <animhelpers_eventlist>
 
-enum FireBulletsFlags_t
-{
-	FIRE_BULLETS_FIRST_SHOT_ACCURATE = 0x1,		// Pop the first shot with perfect accuracy
-	FIRE_BULLETS_DONT_HIT_UNDERWATER = 0x2,		// If the shot hits its target underwater, don't damage it
-	FIRE_BULLETS_ALLOW_WATER_SURFACE_IMPACTS = 0x4,	// If the shot hits water surface, still call DoImpactEffect
-	FIRE_BULLETS_TEMPORARY_DANGER_SOUND = 0x8,		// Danger sounds added from this impact can be stomped immediately if another is queued
-#if defined GAME_L4D2
-	FIRE_BULLETS_NO_PIERCING_SPARK = 0x16,	// do a piercing spark effect when a bullet penetrates an alien
-	FIRE_BULLETS_HULL = 0x32,	// bullet trace is a hull rather than a line
-	FIRE_BULLETS_ANGULAR_SPREAD = 0x64,	// bullet spread is based on uniform random change to angles rather than gaussian search
-#endif
-};
-
-enum struct FireBulletsInfo_t
-{
-	int m_iShots;
-	float m_vecSrc[3];
-	float m_vecDirShooting[3];
-	float m_vecSpread[3];
-	float m_flDistance;
-	int m_iAmmoType;
-	int m_iTracerFreq;
-	float m_flDamage;
-	int m_iPlayerDamage;	// Damage to be used instead of m_flDamage if we hit a player
-	int m_nFlags;			// See FireBulletsFlags_t
-	float m_flDamageForceScale;
-	int m_pAttacker;
-	int m_pAdditionalIgnoreEnt;
-	bool m_bPrimaryAttack;
-#if defined GAME_TF2
-	bool m_bUseServerRandomSeed;
-#endif
-}
-
-#define FireBulletsInfo_tVar any[]
-
 methodmap BaseEntity
 {
 	public BaseEntity(int entity) { return view_as<BaseEntity>(entity); }
-	public native void FireBullets(const FireBulletsInfo_tVar info);
 	public native void WorldSpaceCenter(float center[3]);
 	public native void SetAbsOrigin(const float pos[3]);
 }

@@ -112,7 +112,6 @@ int CBaseAnimatingStudioFrameAdvance = -1;
 int CBaseAnimatingDispatchAnimEvents = -1;
 int CBaseAnimatingGetAttachment = -1;
 int CBaseAnimatingGetBoneTransform = -1;
-int CBaseEntityFireBullets = -1;
 int CBaseEntityWorldSpaceCenter = -1;
 
 void *CBaseAnimatingResetSequenceInfo = nullptr;
@@ -219,7 +218,6 @@ class CStudioHdr;
 
 enum TOGGLE_STATE : int;
 struct AI_CriteriaSet;
-struct FireBulletsInfo_t;
 
 #include <shared/shareddefs.h>
 
@@ -233,11 +231,6 @@ public:
 	model_t *GetModel( void )
 	{
 		return (model_t *)modelinfo->GetModel( GetModelIndex() );
-	}
-	
-	void FireBullets( const FireBulletsInfo_t &info )
-	{
-		call_vfunc<void, CBaseEntity, const FireBulletsInfo_t &>(this, CBaseEntityFireBullets, info);
 	}
 	
 	void SetAbsOrigin( const Vector& origin )
@@ -2377,50 +2370,6 @@ static cell_t BaseAnimatingResetSequenceInfo(IPluginContext *pContext, const cel
 	return 0;
 }
 
-static cell_t BaseEntityFireBullets(IPluginContext *pContext, const cell_t *params)
-{
-	CBaseAnimating *pEntity = (CBaseAnimating *)gamehelpers->ReferenceToEntity(params[1]);
-	if(!pEntity) {
-		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
-	}
-	
-	FireBulletsInfo_t info{};
-	
-	cell_t *addr = nullptr;
-	pContext->LocalToPhysAddr(params[2], &addr);
-
-	info.m_iShots = addr[0];
-	info.m_vecSrc.x = sp_ctof(addr[1]);
-	info.m_vecSrc.y = sp_ctof(addr[2]);
-	info.m_vecSrc.z = sp_ctof(addr[3]);
-	info.m_vecDirShooting.x = sp_ctof(addr[4]);
-	info.m_vecDirShooting.y = sp_ctof(addr[5]);
-	info.m_vecDirShooting.z = sp_ctof(addr[6]);
-	info.m_vecSpread.x = sp_ctof(addr[7]);
-	info.m_vecSpread.y = sp_ctof(addr[8]);
-	info.m_vecSpread.z = sp_ctof(addr[9]);
-	info.m_flDistance = sp_ctof(addr[10]);
-	info.m_iAmmoType = addr[11];
-	info.m_iTracerFreq = addr[12];
-	info.m_flDamage = sp_ctof(addr[13]);
-#if SOURCE_ENGINE == SE_TF2
-	info.m_iPlayerDamage = addr[14];
-#elif SOURCE_ENGINE == SE_LEFT4DEAD2
-	info.m_flPlayerDamage = addr[14];
-#endif
-	info.m_nFlags = addr[15];
-	info.m_flDamageForceScale = sp_ctof(addr[16]);
-	info.m_pAttacker = gamehelpers->ReferenceToEntity(addr[17]);
-	info.m_pAdditionalIgnoreEnt = gamehelpers->ReferenceToEntity(addr[18]);
-	info.m_bPrimaryAttack = addr[19];
-#if SOURCE_ENGINE == SE_TF2
-	info.m_bUseServerRandomSeed = addr[20];
-#endif
-	
-	pEntity->FireBullets(info);
-	return 0;
-}
-
 static cell_t BaseEntitySetAbsOrigin(IPluginContext *pContext, const cell_t *params)
 {
 	CBaseEntity *pEntity = gamehelpers->ReferenceToEntity(params[1]);
@@ -3684,7 +3633,6 @@ void Sample::OnCoreMapStart(edict_t *pEdictList, int edictCount, int clientMax)
 
 static const sp_nativeinfo_t g_sNativesInfo[] =
 {
-	{"BaseEntity.FireBullets", BaseEntityFireBullets},
 	{"BaseEntity.SetAbsOrigin", BaseEntitySetAbsOrigin},
 	{"BaseEntity.WorldSpaceCenter", BaseEntityWorldSpaceCenter},
 	{"BaseAnimating.SelectWeightedSequence", BaseAnimatingSelectWeightedSequenceEx},
@@ -3827,7 +3775,6 @@ bool Sample::SDK_OnLoad(char *error, size_t maxlen, bool late)
 	g_pGameConf->GetOffset("CBaseAnimating::HandleAnimEvent", &offset);
 	SH_MANUALHOOK_RECONFIGURE(HandleAnimEvent, offset, 0, 0);
 	
-	g_pGameConf->GetOffset("CBaseEntity::FireBullets", &CBaseEntityFireBullets);
 	g_pGameConf->GetOffset("CBaseEntity::WorldSpaceCenter", &CBaseEntityWorldSpaceCenter);
 	
 	g_pGameConf->GetOffset("CBaseAnimating::m_pStudioHdr", &m_pStudioHdrOffset);

@@ -45,10 +45,6 @@
 			{
 				"linux" "162"
 			}
-			"CBaseEntity::FireBullets"
-			{
-				"linux" "123"
-			}
 			"CBaseAnimating::GetBoneTransform"
 			{
 				"linux" "214"
@@ -82,10 +78,6 @@
 			"CBaseEntity::WorldSpaceCenter"
 			{
 				"linux" "153"
-			}
-			"CBaseEntity::FireBullets"
-			{
-				"linux" "116"
 			}
 			"CBaseAnimating::GetBoneTransform"
 			{
