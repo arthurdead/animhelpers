@@ -173,9 +173,11 @@ methodmap BaseFlex < BaseAnimatingOverlay
 
 native Activity ActivityList_IndexForName(const char[] name);
 native void ActivityList_NameForIndex(int id, char[] name, int len);
+native Activity ActivityList_RegisterPrivateActivity(const char[] name);
 
 native int EventList_IndexForName(const char[] name);
 native void EventList_NameForIndex(int id, char[] name, int len);
+native int EventList_RegisterPrivateEvent(const char[] name);
 
 stock bool EntityIsAnimating(int entity) { return HasEntProp(entity, Prop_Send, "m_nSequence"); }
 stock bool EntityIsAnimatingOverlay(int entity) { return HasEntProp(entity, Prop_Data, "m_AnimOverlay"); }

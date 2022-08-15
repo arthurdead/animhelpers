@@ -70,8 +70,8 @@ class IStaticPropMgrServer *staticpropmgr = nullptr;
 #include <vector>
 #include <IForwardSys.h>
 
-extern int g_nActivityListVersion;
-extern int g_nEventListVersion;
+int *g_nActivityListVersion = nullptr;
+int *g_nEventListVersion = nullptr;
 
 class IFileSystem;
 
@@ -118,6 +118,15 @@ void *CBaseAnimatingResetSequenceInfo = nullptr;
 void *CBaseAnimatingLockStudioHdr = nullptr;
 void *CBaseEntitySetAbsOrigin = nullptr;
 void *CBaseEntityCalcAbsolutePosition = nullptr;
+
+void *ActivityList_NameForIndexPtr = nullptr;
+void *ActivityList_IndexForNamePtr = nullptr;
+void *ActivityList_RegisterPrivateActivityPtr = nullptr;
+
+void *EventList_NameForIndexPtr = nullptr;
+void *EventList_IndexForNamePtr = nullptr;
+void *EventList_RegisterPrivateEventPtr = nullptr;
+void *EventList_GetEventTypePtr = nullptr;
 
 template <typename R, typename T, typename ...Args>
 R call_mfunc(T *pThisPtr, void *offset, Args ...args)
@@ -343,12 +352,47 @@ enum
 #include <bone_setup.cpp>
 #include <stringregistry.cpp>
 #define ListFromString ListFromStringEvent
-#include <eventlist.cpp>
+//#include <eventlist.cpp>
 #undef ListFromString
 #define ListFromString ListFromStringActivity
-#include "activitylist.cpp"
+//#include "activitylist.cpp"
 #undef ListFromString
 #include <collisionutils.cpp>
+
+Activity ActivityList_RegisterPrivateActivity( const char *pszActivityName )
+{
+	return ((Activity(*)(const char *))ActivityList_RegisterPrivateActivityPtr)(pszActivityName);
+}
+
+int ActivityList_IndexForName( const char *pszActivityName )
+{
+	return ((int(*)(const char *))ActivityList_IndexForNamePtr)(pszActivityName);
+}
+
+const char *ActivityList_NameForIndex( int iActivityIndex )
+{
+	return ((const char *(*)(int))ActivityList_NameForIndexPtr)(iActivityIndex);
+}
+
+Animevent EventList_RegisterPrivateEvent( const char *pszEventName )
+{
+	return ((Animevent(*)(const char *))EventList_RegisterPrivateEventPtr)(pszEventName);
+}
+
+int EventList_IndexForName( const char *pszEventName )
+{
+	return ((int(*)(const char *))EventList_IndexForNamePtr)(pszEventName);
+}
+
+const char *EventList_NameForIndex( int iEventIndex )
+{
+	return ((const char *(*)(int))EventList_NameForIndexPtr)(iEventIndex);
+}
+
+int EventList_GetEventType( int eventIndex )
+{
+	return ((int(*)(int))EventList_GetEventTypePtr)(eventIndex);
+}
 
 int SharedRandomInt( const char *sharedname, int iMinVal, int iMaxVal, int additionalSeed /*=0*/ )
 {
@@ -2904,12 +2948,28 @@ static cell_t ActivityList_IndexForNameNative(IPluginContext *pContext, const ce
 	return ActivityList_IndexForName(name);
 }
 
+static cell_t ActivityList_RegisterPrivateActivityNative(IPluginContext *pContext, const cell_t *params)
+{
+	char *name = nullptr;
+	pContext->LocalToString(params[1], &name);
+	
+	return ActivityList_RegisterPrivateActivity(name);
+}
+
 static cell_t EventList_IndexForNameNative(IPluginContext *pContext, const cell_t *params)
 {
 	char *name = nullptr;
 	pContext->LocalToString(params[1], &name);
 	
 	return EventList_IndexForName(name);
+}
+
+static cell_t EventList_RegisterPrivateEventNative(IPluginContext *pContext, const cell_t *params)
+{
+	char *name = nullptr;
+	pContext->LocalToString(params[1], &name);
+	
+	return EventList_RegisterPrivateEvent(name);
 }
 
 static cell_t ActivityList_NameForIndexNative(IPluginContext *pContext, const cell_t *params)
@@ -3613,6 +3673,7 @@ void ReadMapLump(const char *mapname, int id, std::vector<T> &lumps)
 
 void Sample::OnCoreMapStart(edict_t *pEdictList, int edictCount, int clientMax)
 {
+#if 0
 	ActivityList_Free();
 	ActivityList_Init();
 	ActivityList_RegisterSharedActivities();
@@ -3620,6 +3681,7 @@ void Sample::OnCoreMapStart(edict_t *pEdictList, int edictCount, int clientMax)
 	EventList_Free();
 	EventList_Init();
 	EventList_RegisterSharedEvents();
+#endif
 	
 	mapmodels.clear();
 	
@@ -3719,8 +3781,10 @@ static const sp_nativeinfo_t g_sNativesInfo[] =
 	{"BaseAnimatingOverlay.MaxOverlays", BaseAnimatingOverlayMaxOverlays},
 	{"ActivityList_IndexForName", ActivityList_IndexForNameNative},
 	{"ActivityList_NameForIndex", ActivityList_NameForIndexNative},
+	{"ActivityList_RegisterPrivateActivity", ActivityList_RegisterPrivateActivityNative},
 	{"EventList_IndexForName", EventList_IndexForNameNative},
 	{"EventList_NameForIndex", EventList_NameForIndexNative},
+	{"EventList_RegisterPrivateEvent", EventList_RegisterPrivateEventNative},
 	{"Model_t.Type.get", Model_tTypeget},
 	{"Model_t.GetName", Model_tGetName},
 	{"Model_t.GetBounds", Model_tGetBounds},
@@ -3789,7 +3853,19 @@ bool Sample::SDK_OnLoad(char *error, size_t maxlen, bool late)
 	g_pGameConf->GetMemSig("CBaseEntity::CalcAbsolutePosition", &CBaseEntityCalcAbsolutePosition);
 	g_pGameConf->GetMemSig("CBaseEntity::SetAbsOrigin", &CBaseEntitySetAbsOrigin);
 	g_pGameConf->GetMemSig("modelloader", (void **)&modelloader);
-	
+
+	g_pGameConf->GetMemSig("ActivityList_NameForIndex", &ActivityList_NameForIndexPtr);
+	g_pGameConf->GetMemSig("ActivityList_IndexForName", &ActivityList_IndexForNamePtr);
+	g_pGameConf->GetMemSig("ActivityList_RegisterPrivateActivity", &ActivityList_RegisterPrivateActivityPtr);
+
+	g_pGameConf->GetMemSig("EventList_NameForIndex", &EventList_NameForIndexPtr);
+	g_pGameConf->GetMemSig("EventList_IndexForName", &EventList_IndexForNamePtr);
+	g_pGameConf->GetMemSig("EventList_RegisterPrivateEvent", &EventList_RegisterPrivateEventPtr);
+	g_pGameConf->GetMemSig("EventList_GetEventType", &EventList_GetEventTypePtr);
+
+	g_pGameConf->GetMemSig("g_nActivityListVersion", (void **)&g_nActivityListVersion);
+	g_pGameConf->GetMemSig("g_nEventListVersion", (void **)&g_nEventListVersion);
+
 	gameconfs->CloseGameConfigFile(g_pGameConf);
 	
 	sm_sendprop_info_t info{};

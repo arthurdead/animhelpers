@@ -35,6 +35,51 @@
 				"library" "engine"
 				"linux" "@modelloader"
 			}
+			"ActivityList_NameForIndex"
+			{
+				"library" "server"
+				"linux" "@_Z25ActivityList_NameForIndexi"
+			}
+			"ActivityList_IndexForName"
+			{
+				"library" "server"
+				"linux" "@_Z25ActivityList_IndexForNamePKc"
+			}
+			"ActivityList_RegisterPrivateActivity"
+			{
+				"library" "server"
+				"linux" "@_Z36ActivityList_RegisterPrivateActivityPKc"
+			}
+			"EventList_NameForIndex"
+			{
+				"library" "server"
+				"linux" "@_Z22EventList_NameForIndexi"
+			}
+			"EventList_IndexForName"
+			{
+				"library" "server"
+				"linux" "@_Z22EventList_IndexForNamePKc"
+			}
+			"EventList_RegisterPrivateEvent"
+			{
+				"library" "server"
+				"linux" "@_Z30EventList_RegisterPrivateEventPKc"
+			}
+			"EventList_GetEventType"
+			{
+				"library" "server"
+				"linux" "@_Z22EventList_GetEventTypei"
+			}
+			"g_nEventListVersion"
+			{
+				"library" "server"
+				"linux" "@g_nEventListVersion"
+			}
+			"g_nActivityListVersion"
+			{
+				"library" "server"
+				"linux" "@g_nActivityListVersion"
+			}
 		}
 	}
 	"left4dead2"
