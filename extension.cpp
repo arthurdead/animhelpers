@@ -3902,13 +3902,34 @@ bool Sample::SDK_OnLoad(char *error, size_t maxlen, bool late)
 	sharesys->AddNatives(myself, g_sNativesInfo);
 	
 	plsys->AddPluginsListener(this);
-	
+
 	sharesys->RegisterLibrary(myself, "animhelpers");
-	
+	sharesys->AddInterface(myself, this);
+
 	return true;
 }
 
 void Sample::SDK_OnUnload()
 {
 	
+}
+
+int Sample::SelectWeightedSequence(CBaseAnimating *pEntity, int activity)
+{
+	return pEntity->SelectWeightedSequence(activity);
+}
+
+void Sample::StudioFrameAdvance(CBaseAnimating *pEntity)
+{
+	pEntity->StudioFrameAdvance();
+}
+
+void Sample::DispatchAnimEvents(CBaseAnimating *pEntity)
+{
+	pEntity->DispatchAnimEvents();
+}
+
+void Sample::ResetSequenceInfo(CBaseAnimating *pEntity)
+{
+	pEntity->ResetSequenceInfo();
 }

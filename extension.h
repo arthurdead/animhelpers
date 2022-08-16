@@ -38,15 +38,20 @@
  */
 
 #include "smsdk_ext.h"
-
+#include "public/IAnimHelpers.h"
 
 /**
  * @brief Sample implementation of the SDK Extension.
  * Note: Uncomment one of the pre-defined virtual functions in order to use it.
  */
-class Sample : public SDKExtension, public IPluginsListener
+class Sample : public SDKExtension, public IPluginsListener, public IAnimHelpers
 {
 public:
+	virtual int SelectWeightedSequence(CBaseAnimating *pEntity, int activity);
+	virtual void StudioFrameAdvance(CBaseAnimating *pEntity);
+	virtual void DispatchAnimEvents(CBaseAnimating *pEntity);
+	virtual void ResetSequenceInfo(CBaseAnimating *pEntity);
+
 	void OnCoreMapStart(edict_t *pEdictList, int edictCount, int clientMax);
 	
 	virtual void OnPluginUnloaded(IPlugin *plugin);
