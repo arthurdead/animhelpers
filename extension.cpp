@@ -2826,8 +2826,9 @@ static cell_t BaseAnimatingGetPoseParameterName(IPluginContext *pContext, const 
 	if(!name) {
 		name = "";
 	}
-	pContext->StringToLocal(params[3], params[4], name);
-	return 0;
+	size_t written = 0;
+	pContext->StringToLocalUTF8(params[3], params[4], name, &written);
+	return written;
 }
 
 static cell_t BaseAnimatingGetAttachmentName(IPluginContext *pContext, const cell_t *params)
@@ -2841,8 +2842,9 @@ static cell_t BaseAnimatingGetAttachmentName(IPluginContext *pContext, const cel
 	if(!name) {
 		name = "";
 	}
-	pContext->StringToLocal(params[3], params[4], name);
-	return 0;
+	size_t written = 0;
+	pContext->StringToLocalUTF8(params[3], params[4], name, &written);
+	return written;
 }
 
 static cell_t BaseAnimatingGetBoneName(IPluginContext *pContext, const cell_t *params)
@@ -2856,7 +2858,8 @@ static cell_t BaseAnimatingGetBoneName(IPluginContext *pContext, const cell_t *p
 	if(!name) {
 		name = "";
 	}
-	pContext->StringToLocal(params[3], params[4], name);
+	size_t written = 0;
+	pContext->StringToLocalUTF8(params[3], params[4], name, &written);
 	return 0;
 }
 
@@ -2871,8 +2874,9 @@ static cell_t BaseAnimatingGetBodygroupName(IPluginContext *pContext, const cell
 	if(!name) {
 		name = "";
 	}
-	pContext->StringToLocal(params[3], params[4], name);
-	return 0;
+	size_t written = 0;
+	pContext->StringToLocalUTF8(params[3], params[4], name, &written);
+	return written;
 }
 
 static cell_t BaseAnimatingGetSequenceName(IPluginContext *pContext, const cell_t *params)
@@ -2886,8 +2890,9 @@ static cell_t BaseAnimatingGetSequenceName(IPluginContext *pContext, const cell_
 	if(!name) {
 		name = "";
 	}
-	pContext->StringToLocal(params[3], params[4], name);
-	return 0;
+	size_t written = 0;
+	pContext->StringToLocalUTF8(params[3], params[4], name, &written);
+	return written;
 }
 
 static cell_t BaseAnimatingGetSequenceActivityName(IPluginContext *pContext, const cell_t *params)
@@ -2901,8 +2906,9 @@ static cell_t BaseAnimatingGetSequenceActivityName(IPluginContext *pContext, con
 	if(!name) {
 		name = "";
 	}
-	pContext->StringToLocal(params[3], params[4], name);
-	return 0;
+	size_t written = 0;
+	pContext->StringToLocalUTF8(params[3], params[4], name, &written);
+	return written;
 }
 
 static cell_t BaseAnimatingGetSequenceActivity(IPluginContext *pContext, const cell_t *params)
@@ -2926,8 +2932,9 @@ static cell_t BaseFlexGetFlexControllerName(IPluginContext *pContext, const cell
 	if(!name) {
 		name = "";
 	}
-	pContext->StringToLocal(params[3], params[4], name);
-	return 0;
+	size_t written = 0;
+	pContext->StringToLocalUTF8(params[3], params[4], name, &written);
+	return written;
 }
 
 static cell_t BaseFlexGetNumFlexControllers(IPluginContext *pContext, const cell_t *params)
@@ -2978,8 +2985,9 @@ static cell_t ActivityList_NameForIndexNative(IPluginContext *pContext, const ce
 	if(!name) {
 		name = "";
 	}
-	pContext->StringToLocal(params[2], params[3], name);
-	return 0;
+	size_t written = 0;
+	pContext->StringToLocalUTF8(params[2], params[3], name, &written);
+	return written;
 }
 
 static cell_t EventList_NameForIndexNative(IPluginContext *pContext, const cell_t *params)
@@ -2988,8 +2996,9 @@ static cell_t EventList_NameForIndexNative(IPluginContext *pContext, const cell_
 	if(!name) {
 		name = "";
 	}
-	pContext->StringToLocal(params[2], params[3], name);
-	return 0;
+	size_t written = 0;
+	pContext->StringToLocalUTF8(params[2], params[3], name, &written);
+	return written;
 }
 
 SH_DECL_MANUALHOOK0_void(GenericDtor, 1, 0, 0)
@@ -3005,7 +3014,6 @@ void AnimEventToAddr(IPluginContext *pContext, animevent_t *pEvent, cell_t *addr
 #elif SOURCE_ENGINE == SE_LEFT4DEAD2
 	addr[0] = pEvent->Event();
 #endif
-	//pContext->StringToLocal(addr[1], ANIMEVENT_OPTIONS_STR_SIZE, pEvent->options);
 	addr[2] = sp_ftoc(pEvent->cycle);
 	addr[3] = sp_ftoc(pEvent->eventtime);
 	addr[4] = pEvent->type;
@@ -3019,7 +3027,6 @@ void AddrToAnimEvent(IPluginContext *pContext, animevent_t *pEvent, cell_t *addr
 #elif SOURCE_ENGINE == SE_LEFT4DEAD2
 	
 #endif
-	//pContext->LocalToString(addr[1], (char **)&pEvent->options);
 	pEvent->cycle = sp_ctof(addr[2]);
 	pEvent->eventtime = sp_ctof(addr[3]);
 	pEvent->type = sp_ctof(addr[4]);
@@ -3228,8 +3235,9 @@ static cell_t Model_tGetName(IPluginContext *pContext, const cell_t *params)
 {
 	model_t *mod = (model_t *)params[1];
 	const char *ptr = modelinfo->GetModelName(mod);
-	pContext->StringToLocal(params[2], params[3], ptr);
-	return 0;
+	size_t written = 0;
+	pContext->StringToLocalUTF8(params[2], params[3], ptr, &written);
+	return written;
 }
 
 static cell_t Model_tGetBounds(IPluginContext *pContext, const cell_t *params)
@@ -3580,10 +3588,10 @@ static cell_t Model_tGetMaterialName(IPluginContext *pContext, const cell_t *par
 	model_t *mod = (model_t *)params[1];
 	
 	const char *ptr = GetModelMaterialName(mod, params[2]);
-	
-	pContext->StringToLocal(params[3], params[4], ptr);
-	
-	return 0;
+
+	size_t written = 0;
+	pContext->StringToLocalUTF8(params[3], params[4], ptr, &written);
+	return written;
 }
 
 static cell_t ModelInfoGetModelIndex(IPluginContext *pContext, const cell_t *params)

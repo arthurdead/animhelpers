@@ -26,7 +26,7 @@ methodmap BaseAnimating < BaseEntity
 	public native int SelectHeaviestSequence(Activity activity);
 
 	public native int GetNumPoseParameters();
-	public native void GetPoseParameterName(int id, char[] name, int len);
+	public native int GetPoseParameterName(int id, char[] name, int len);
 	public native int LookupPoseParameter(const char[] name);
 	public native void SetPoseParameter(int index, float value);
 	public native float GetPoseParameter(int index);
@@ -35,7 +35,7 @@ methodmap BaseAnimating < BaseEntity
 	public native void ResetSequenceInfo();
 
 	public native int GetNumAttachments();
-	public native void GetAttachmentName(int id, char[] name, int len);
+	public native int GetAttachmentName(int id, char[] name, int len);
 	public native int LookupAttachment(const char[] pAttachmentName);
 	public native int GetAttachmentBone(int id);
 	public native bool GetAttachment(int id, float absOrigin[3] = NULL_VECTOR, float absAngles[3] = NULL_VECTOR);
@@ -66,13 +66,13 @@ methodmap BaseAnimating < BaseEntity
 	}
 
 	public native int GetNumBones();
-	public native void GetBoneName(int id, char[] name, int len);
+	public native int GetBoneName(int id, char[] name, int len);
 	public native int LookupBone(const char[] name);
 	public native bool GetBonePosition(int id, float absOrigin[3] = NULL_VECTOR, float absAngles[3] = NULL_VECTOR);
 	public native bool GetBonePositionLocal(int id, float absOrigin[3] = NULL_VECTOR, float absAngles[3] = NULL_VECTOR);
 
 	public native int GetNumBodygroups();
-	public native void GetBodygroupName(int id, char[] name, int len);
+	public native int GetBodygroupName(int id, char[] name, int len);
 	public native int FindBodygroupByName(const char[] name);
 	public native void SetBodygroup(int iGroup, int iValue);
 
@@ -81,8 +81,8 @@ methodmap BaseAnimating < BaseEntity
 	public native void SetBoneController(int id, float value);
 
 	public native int GetNumSequences();
-	public native void GetSequenceName(int id, char[] name, int len);
-	public native void GetSequenceActivityName(int id, char[] name, int len);
+	public native int GetSequenceName(int id, char[] name, int len);
+	public native int GetSequenceActivityName(int id, char[] name, int len);
 	public native Activity GetSequenceActivity(int seq);
 	public native int LookupSequence(const char[] name);
 	public void ResetSequence(int sequence, bool force = false)
@@ -165,18 +165,18 @@ methodmap BaseFlex < BaseAnimatingOverlay
 	public BaseFlex(int entity) { return view_as<BaseFlex>(entity); }
 
 	public native int GetNumFlexControllers();
-	public native void GetFlexControllerName(int id, char[] name, int len);
+	public native int GetFlexControllerName(int id, char[] name, int len);
 	public native int FindFlexController(const char[] name);
 	public native void SetFlexWeight(int id, float value);
 	public native float GetFlexWeight(int id);
 };
 
 native Activity ActivityList_IndexForName(const char[] name);
-native void ActivityList_NameForIndex(int id, char[] name, int len);
+native int ActivityList_NameForIndex(int id, char[] name, int len);
 native Activity ActivityList_RegisterPrivateActivity(const char[] name);
 
 native int EventList_IndexForName(const char[] name);
-native void EventList_NameForIndex(int id, char[] name, int len);
+native int EventList_NameForIndex(int id, char[] name, int len);
 native int EventList_RegisterPrivateEvent(const char[] name);
 
 stock bool EntityIsAnimating(int entity) { return HasEntProp(entity, Prop_Send, "m_nSequence"); }
