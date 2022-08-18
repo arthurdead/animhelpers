@@ -186,13 +186,3 @@ enum
 
 	LAST_SHARED_ANIMEVENT,
 };
-
-enum struct animevent_t
-{
-	int				event;
-	char options[64];
-	float			cycle;
-	float			eventtime;
-	int				type;
-	int pSource;
-}

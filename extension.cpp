@@ -114,6 +114,8 @@ int CBaseAnimatingGetAttachment = -1;
 int CBaseAnimatingGetBoneTransform = -1;
 int CBaseEntityWorldSpaceCenter = -1;
 
+int CBaseAnimatingHandleAnimEvent = -1;
+
 void *CBaseAnimatingResetSequenceInfo = nullptr;
 void *CBaseAnimatingLockStudioHdr = nullptr;
 void *CBaseEntitySetAbsOrigin = nullptr;
@@ -593,6 +595,11 @@ public:
 	{ return GetSequenceMovement(GetAnimTimeInterval(), bMoveSeqFinished, newPosition, newAngles); }
 	
 	Activity GetSequenceActivity( int iSequence );
+
+	void HandleAnimEvent(animevent_t *pEvent)
+	{
+		call_vfunc<void, CBaseAnimating, animevent_t *>(this, CBaseAnimatingHandleAnimEvent, pEvent);
+	}
 };
 
 Activity CBaseAnimating::GetSequenceActivity( int iSequence )
@@ -3004,33 +3011,61 @@ static cell_t EventList_NameForIndexNative(IPluginContext *pContext, const cell_
 SH_DECL_MANUALHOOK0_void(GenericDtor, 1, 0, 0)
 SH_DECL_MANUALHOOK1_void(HandleAnimEvent, 0, 0, 0, animevent_t *)
 
-#define ANIMEVENT_STRUCT_SIZE 6
 #define ANIMEVENT_OPTIONS_STR_SIZE 64
+#define ANIMEVENT_OPTIONS_STR_SIZE_IN_CELL (ANIMEVENT_OPTIONS_STR_SIZE / sizeof(cell_t))
+#define ANIMEVENT_STRUCT_SIZE (sizeof(cell_t) + ANIMEVENT_OPTIONS_STR_SIZE + (sizeof(cell_t) * 4))
+#define ANIMEVENT_STRUCT_SIZE_IN_CELL (ANIMEVENT_STRUCT_SIZE / sizeof(cell_t))
 
-void AnimEventToAddr(IPluginContext *pContext, animevent_t *pEvent, cell_t *addr)
+void AnimEventToAddr(animevent_t *pEvent, cell_t *addr)
 {
+	cell_t *tmp_addr{addr};
+
 #if SOURCE_ENGINE == SE_TF2
-	addr[0] = pEvent->event;
+	*tmp_addr = pEvent->event;
 #elif SOURCE_ENGINE == SE_LEFT4DEAD2
-	addr[0] = pEvent->Event();
+	*tmp_addr = pEvent->Event();
 #endif
-	addr[2] = sp_ftoc(pEvent->cycle);
-	addr[3] = sp_ftoc(pEvent->eventtime);
-	addr[4] = pEvent->type;
-	addr[5] = gamehelpers->EntityToBCompatRef(pEvent->pSource);
+	++tmp_addr;
+
+	strncpy((char *)tmp_addr, pEvent->options, strlen(pEvent->options)+1);
+	tmp_addr += ANIMEVENT_OPTIONS_STR_SIZE_IN_CELL;
+
+	*tmp_addr = sp_ftoc(pEvent->cycle);
+	++tmp_addr;
+
+	*tmp_addr = sp_ftoc(pEvent->eventtime);
+	++tmp_addr;
+
+	*tmp_addr = pEvent->type;
+	++tmp_addr;
+
+	*tmp_addr = gamehelpers->EntityToBCompatRef(pEvent->pSource);
 }
 
-void AddrToAnimEvent(IPluginContext *pContext, animevent_t *pEvent, cell_t *addr)
+void AddrToAnimEvent(animevent_t *pEvent, const cell_t *addr)
 {
+	const cell_t *tmp_addr{addr};
+
 #if SOURCE_ENGINE == SE_TF2
-	pEvent->event = addr[0];
+	pEvent->event = *tmp_addr;
 #elif SOURCE_ENGINE == SE_LEFT4DEAD2
 	
 #endif
-	pEvent->cycle = sp_ctof(addr[2]);
-	pEvent->eventtime = sp_ctof(addr[3]);
-	pEvent->type = sp_ctof(addr[4]);
-	pEvent->pSource = (CBaseAnimating *)gamehelpers->ReferenceToEntity(addr[5]);
+	++tmp_addr;
+
+	pEvent->options = (const char *)tmp_addr;
+	tmp_addr += ANIMEVENT_OPTIONS_STR_SIZE_IN_CELL;
+
+	pEvent->cycle = sp_ctof(*tmp_addr);
+	++tmp_addr;
+
+	pEvent->eventtime = sp_ctof(*tmp_addr);
+	++tmp_addr;
+
+	pEvent->type = sp_ctof(*tmp_addr);
+	++tmp_addr;
+
+	pEvent->pSource = (CBaseAnimating *)gamehelpers->ReferenceToEntity(*tmp_addr);
 }
 
 struct callback_holder_t
@@ -3058,15 +3093,13 @@ struct callback_holder_t
 			RETURN_META(MRES_IGNORED);
 		}
 
-		IPluginContext *pContext = callback->GetParentContext();
-
-		cell_t addr[ANIMEVENT_STRUCT_SIZE];
-		AnimEventToAddr(pContext, pEvent, addr);
+		cell_t addr[ANIMEVENT_STRUCT_SIZE_IN_CELL];
+		AnimEventToAddr(pEvent, addr);
 		
 		CBaseEntity *pEntity = META_IFACEPTR(CBaseEntity);
 		
 		callback->PushCell(gamehelpers->EntityToBCompatRef(pEntity));
-		callback->PushArray(addr, ANIMEVENT_STRUCT_SIZE, SM_PARAM_COPYBACK);
+		callback->PushArray(addr, ANIMEVENT_STRUCT_SIZE_IN_CELL, SM_PARAM_COPYBACK);
 		callback->PushCell(data);
 		cell_t res = 0;
 		callback->Execute(&res);
@@ -3077,7 +3110,7 @@ struct callback_holder_t
 			}
 			case Pl_Changed: {
 				animevent_t copy{};
-				AddrToAnimEvent(pContext, &copy, addr);
+				AddrToAnimEvent(&copy, addr);
 				
 				RETURN_META_MNEWPARAMS(MRES_HANDLED, HandleAnimEvent, (&copy));
 			}
@@ -3146,6 +3179,23 @@ static cell_t BaseAnimatingSetHandleAnimEvent(IPluginContext *pContext, const ce
 	holder->callback = callback;
 	holder->data = params[3];
 	
+	return 0;
+}
+
+static cell_t BaseAnimatingHandleAnimEvent(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseAnimating *pEntity = (CBaseAnimating *)gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+
+	cell_t *addr = nullptr;
+	pContext->LocalToPhysAddr(params[2], &addr);
+
+	animevent_t event{};
+	AddrToAnimEvent(&event, addr);
+
+	pEntity->HandleAnimEvent(&event);
 	return 0;
 }
 
@@ -3747,6 +3797,7 @@ static const sp_nativeinfo_t g_sNativesInfo[] =
 	{"BaseAnimating.GetBoneController", BaseAnimatingGetBoneControllerEx},
 	{"BaseAnimating.SetBoneController", BaseAnimatingSetBoneControllerEx},
 	{"BaseAnimating.SetHandleAnimEvent", BaseAnimatingSetHandleAnimEvent},
+	{"BaseAnimating.HandleAnimEvent", BaseAnimatingHandleAnimEvent},
 	{"BaseAnimating.GetIntervalMovement", BaseAnimatingGetIntervalMovement},
 	{"BaseAnimating.GetSequenceMovement", BaseAnimatingGetSequenceMovement},
 	{"BaseFlex.FindFlexController", BaseFlexFindFlexController},
@@ -3843,9 +3894,8 @@ bool Sample::SDK_OnLoad(char *error, size_t maxlen, bool late)
 	IGameConfig *g_pGameConf = nullptr;
 	gameconfs->LoadGameConfigFile("animhelpers", &g_pGameConf, error, maxlen);
 	
-	int offset = -1;
-	g_pGameConf->GetOffset("CBaseAnimating::HandleAnimEvent", &offset);
-	SH_MANUALHOOK_RECONFIGURE(HandleAnimEvent, offset, 0, 0);
+	g_pGameConf->GetOffset("CBaseAnimating::HandleAnimEvent", &CBaseAnimatingHandleAnimEvent);
+	SH_MANUALHOOK_RECONFIGURE(HandleAnimEvent, CBaseAnimatingHandleAnimEvent, 0, 0);
 	
 	g_pGameConf->GetOffset("CBaseEntity::WorldSpaceCenter", &CBaseEntityWorldSpaceCenter);
 	

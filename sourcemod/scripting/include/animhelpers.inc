@@ -5,6 +5,18 @@
 
 #include <sdktools>
 
+enum struct animevent_t
+{
+	int event;
+	char options[64];
+	float cycle;
+	float eventtime;
+	int type;
+	int pSource;
+}
+
+#define animevent_tVar any[]
+
 #include <animhelpers_activity>
 #include <animhelpers_eventlist>
 
@@ -113,6 +125,7 @@ methodmap BaseAnimating < BaseEntity
 	}
 
 	public native void SetHandleAnimEvent(handleanimevent_func_t func, any data = 0);
+	public native void HandleAnimEvent(animevent_tVar event);
 
 	public native bool GetIntervalMovement(bool &bMoveSeqFinished = false, float pos[3] = NULL_VECTOR, float ang[3] = NULL_VECTOR);
 	public native bool GetSequenceMovement(bool &bMoveSeqFinished = false, float pos[3] = NULL_VECTOR, float ang[3] = NULL_VECTOR);
