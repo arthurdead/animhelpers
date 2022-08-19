@@ -3106,7 +3106,7 @@ struct callback_holder_t
 		
 		switch(res) {
 			case Pl_Continue: {
-				RETURN_META(MRES_IGNORED);
+				RETURN_META(MRES_HANDLED);
 			}
 			case Pl_Changed: {
 				animevent_t copy{};
@@ -3133,7 +3133,7 @@ void callback_holder_t::HookEntityDtor()
 	callbackmap.erase(this_ref);
 	erase = false;
 	delete this;
-	RETURN_META(MRES_IGNORED);
+	RETURN_META(MRES_HANDLED);
 }
 
 callback_holder_t::callback_holder_t(CBaseEntity *pEntity, int ref_, IdentityToken_t *owner_)
