@@ -20,169 +20,128 @@ enum struct animevent_t
 #include <animhelpers_activity>
 #include <animhelpers_eventlist>
 
-methodmap BaseEntity
+native void EntityWorldSpaceCenter(int entity, float center[3]);
+native void EntitySetAbsOrigin(int entity, const float pos[3]);
+
+typedef handleanimevent_func_t = function Action (int entity, animevent_t event, any data);
+
+native Activity AnimatingLookupActivity(int entity, const char[] name);
+native int AnimatingSelectWeightedSequence(int entity, Activity activity);
+native int AnimatingSelectHeaviestSequence(int entity, Activity activity);
+
+native int AnimatingGetNumPoseParameters(int entity);
+native int AnimatingGetPoseParameterName(int entity, int id, char[] name, int len);
+native int AnimatingLookupPoseParameter(int entity, const char[] name);
+native void AnimatingSetPoseParameter(int entity, int index, float value);
+native float AnimatingGetPoseParameter(int entity, int index);
+native void AnimatingStudioFrameAdvance(int entity);
+native void AnimatingDispatchAnimEvents(int entity);
+native void AnimatingResetSequenceInfo(int entity);
+
+native int AnimatingGetNumAttachments(int entity);
+native int AnimatingGetAttachmentName(int entity, int id, char[] name, int len);
+native int AnimatingLookupAttachment(int entity, const char[] pAttachmentName);
+native int AnimatingGetAttachmentBone(int entity, int id);
+native bool AnimatingGetAttachment(int entity, int id, float absOrigin[3] = NULL_VECTOR, float absAngles[3] = NULL_VECTOR);
+native bool AnimatingGetAttachmentLocal(int entity, int id, float absOrigin[3] = NULL_VECTOR, float absAngles[3] = NULL_VECTOR);
+
+native bool AnimatingGetAttachmentMatrix(int entity, int id, float matrix[3][4]);
+
+native int AnimatingGetNumBones(int entity);
+native int AnimatingGetBoneName(int id, char[] name, int len);
+native int AnimatingLookupBone(int entity, const char[] name);
+native bool AnimatingGetBonePosition(int entity, int id, float absOrigin[3] = NULL_VECTOR, float absAngles[3] = NULL_VECTOR);
+native bool AnimatingGetBonePositionLocal(int entity, int id, float absOrigin[3] = NULL_VECTOR, float absAngles[3] = NULL_VECTOR);
+
+native int AnimatingGetNumBodygroups(int entity);
+native int AnimatingGetBodygroupName(int entity, int id, char[] name, int len);
+native int AnimatingFindBodygroupByName(int entity, const char[] name);
+native void AnimatingSetBodygroup(int entity, int iGroup, int iValue);
+
+native int AnimatingGetNumBoneControllers(int entity);
+native float AnimatingGetBoneController(int entity, int id);
+native void AnimatingSetBoneController(int entity, int id, float value);
+
+native int AnimatingGetNumSequences(int entity);
+native int AnimatingGetSequenceName(int entity, int id, char[] name, int len);
+native int AnimatingGetSequenceActivityName(int entity, int id, char[] name, int len);
+native Activity AnimatingGetSequenceActivity(int entity, int seq);
+native int AnimatingLookupSequence(int entity, const char[] name);
+
+stock void AnimatingResetSequence(int entity, int sequence, bool force = false)
 {
-	public BaseEntity(int entity) { return view_as<BaseEntity>(entity); }
-	public native void WorldSpaceCenter(float center[3]);
-	public native void SetAbsOrigin(const float pos[3]);
+	int old = GetEntProp(entity, Prop_Send, "m_nSequence");
+	bool changed = (old != sequence);
+	SetEntProp(entity, Prop_Send, "m_nSequence", sequence);
+	if(force || changed) {
+		SetEntPropFloat(entity, Prop_Data, "m_flAnimTime", GetGameTime());
+		SetEntPropFloat(entity, Prop_Send, "m_flCycle", 0.0);
+		AnimatingResetSequenceInfo(entity);
+	}
 }
 
-typedef handleanimevent_func_t = function Action (BaseAnimating anim, animevent_t event, any data);
+native float AnimatingSequenceDuration(int entity, int sequence);
+native int AnimatingSequenceNumFrames(int entity, int sequence);
+native float AnimatingSequenceFPS(int entity, int sequence);
+native float AnimatingSequenceCPS(int entity, int sequence);
 
-methodmap BaseAnimating < BaseEntity
+stock int AnimatingSequenceFrame(int entity)
 {
-	public BaseAnimating(int entity) { return view_as<BaseAnimating>(entity); }
+	int sequence = GetEntProp(entity, Prop_Send, "m_nSequence");
+	int num_frames = AnimatingSequenceNumFrames(entity, sequence);
 
-	public native Activity LookupActivity(const char[] name);
-	public native int SelectWeightedSequence(Activity activity);
-	public native int SelectHeaviestSequence(Activity activity);
+	float cycle = GetEntPropFloat(entity, Prop_Send, "m_flCycle");
+	return RoundToFloor((cycle * float(num_frames)) / 1.0);
+}
 
-	public native int GetNumPoseParameters();
-	public native int GetPoseParameterName(int id, char[] name, int len);
-	public native int LookupPoseParameter(const char[] name);
-	public native void SetPoseParameter(int index, float value);
-	public native float GetPoseParameter(int index);
-	public native void StudioFrameAdvance();
-	public native void DispatchAnimEvents();
-	public native void ResetSequenceInfo();
+native void AnimatingSetHandleAnimEvent(int entity, handleanimevent_func_t func, any data = 0);
+native void AnimatingHandleAnimEvent(int entity, animevent_tVar event);
 
-	public native int GetNumAttachments();
-	public native int GetAttachmentName(int id, char[] name, int len);
-	public native int LookupAttachment(const char[] pAttachmentName);
-	public native int GetAttachmentBone(int id);
-	public native bool GetAttachment(int id, float absOrigin[3] = NULL_VECTOR, float absAngles[3] = NULL_VECTOR);
-	public native bool GetAttachmentLocal(int id, float absOrigin[3] = NULL_VECTOR, float absAngles[3] = NULL_VECTOR);
+native bool AnimatingGetIntervalMovement(int entity, bool &bMoveSeqFinished = false, float pos[3] = NULL_VECTOR, float ang[3] = NULL_VECTOR);
+native bool AnimatingGetSequenceMovement(int entity, bool &bMoveSeqFinished = false, float pos[3] = NULL_VECTOR, float ang[3] = NULL_VECTOR);
 
-	public native bool __GetAttachmentMatrix(int id, float matrix[3 * 4]);
-	public bool GetAttachmentMatrix(int id, float matrix[3][4])
-	{
-		float __matrix[3 * 4];
-		bool ret = this.__GetAttachmentMatrix(id, __matrix);
+native int AnimatingOverlayAddGestureSequence1(int entity, int sequence, bool autokill=true);
+native int AnimatingOverlayAddGestureSequence2(int entity, int sequence, float flDuration, bool autokill=true);
+native int AnimatingOverlayAddGesture1(int entity, Activity activity, bool autokill=true);
+native int AnimatingOverlayAddGesture2(int entity, Activity activity, float flDuration, bool autokill=true);
+native bool AnimatingOverlayIsPlayingGesture(int entity, Activity activity);
+native void AnimatingOverlayRestartGesture(int entity, Activity activity, bool addifmissing=true, bool autokill=true);
+native void AnimatingOverlayRemoveGesture(int entity, Activity activity);
+native int AnimatingOverlayAddLayeredSequence(int entity, int sequence, int iPriority);
 
-		matrix[0][0] = __matrix[0];
-		matrix[0][1] = __matrix[1];
-		matrix[0][2] = __matrix[2];
-		matrix[0][3] = __matrix[3];
+native void AnimatingOverlayRemoveAllGestures(int entity);
+native void AnimatingOverlaySetLayerPriority(int entity, int iLayer, int iPriority);
+native bool AnimatingOverlayIsValidLayer(int entity, int iLayer);
+native void AnimatingOverlaySetLayerDuration(int entity, int iLayer, float flDuration);
+native float AnimatingOverlayGetLayerDuration(int entity, int iLayer);
+native void AnimatingOverlaySetLayerCycle1(int entity, int iLayer, float flCycle);
+native void AnimatingOverlaySetLayerCycle2(int entity, int iLayer, float flCycle, float flPrevCycle);
+native float AnimatingOverlayGetLayerCycle(int entity, int iLayer);
+native void AnimatingOverlaySetLayerPlaybackRate(int entity, int iLayer, float flPlaybackRate);
+native void AnimatingOverlaySetLayerWeight(int entity, int iLayer, float flWeight);
+native float AnimatingOverlayGetLayerWeight(int entity, int iLayer);
+native void AnimatingOverlaySetLayerBlendIn(int entity, int iLayer, float flBlendIn);
+native void AnimatingOverlaySetLayerBlendOut(int entity, int iLayer, float flBlendOut);
+native void AnimatingOverlaySetLayerAutokill(int entity, int iLayer, bool bAutokill);
+native void AnimatingOverlaySetLayerLooping(int entity, int iLayer, bool bLooping);
+native void AnimatingOverlaySetLayerNoRestore(int entity, int iLayer, bool bNoRestore);
+native Activity AnimatingOverlayGetLayerActivity(int entity, int iLayer);
+native int AnimatingOverlayGetLayerSequence(int entity, int iLayer);
+native int AnimatingOverlayFindGestureLayer(int entity, Activity activity);
+native void AnimatingOverlayRemoveLayer(int entity, int iLayer, float flKillRate=0.2, float flKillDelay=0.0);
+native void AnimatingOverlayFastRemoveLayer(int entity, int iLayer);
+native int AnimatingOverlayGetNumAnimOverlays(int entity);
+native void AnimatingOverlaySetNumAnimOverlays(int entity, int num);
+native void AnimatingOverlayVerifyOrder(int entity);
+native bool AnimatingOverlayHasActiveLayer(int entity);
+native int AnimatingOverlayAllocateLayer(int entity, int iPriority=0);
+native int AnimatingOverlayMaxOverlays();
 
-		matrix[1][0] = __matrix[4];
-		matrix[1][1] = __matrix[5];
-		matrix[1][2] = __matrix[6];
-		matrix[1][3] = __matrix[7];
-
-		matrix[2][0] = __matrix[8];
-		matrix[2][1] = __matrix[9];
-		matrix[2][2] = __matrix[10];
-		matrix[2][3] = __matrix[11];
-
-		return ret;
-	}
-
-	public native int GetNumBones();
-	public native int GetBoneName(int id, char[] name, int len);
-	public native int LookupBone(const char[] name);
-	public native bool GetBonePosition(int id, float absOrigin[3] = NULL_VECTOR, float absAngles[3] = NULL_VECTOR);
-	public native bool GetBonePositionLocal(int id, float absOrigin[3] = NULL_VECTOR, float absAngles[3] = NULL_VECTOR);
-
-	public native int GetNumBodygroups();
-	public native int GetBodygroupName(int id, char[] name, int len);
-	public native int FindBodygroupByName(const char[] name);
-	public native void SetBodygroup(int iGroup, int iValue);
-
-	public native int GetNumBoneControllers();
-	public native float GetBoneController(int id);
-	public native void SetBoneController(int id, float value);
-
-	public native int GetNumSequences();
-	public native int GetSequenceName(int id, char[] name, int len);
-	public native int GetSequenceActivityName(int id, char[] name, int len);
-	public native Activity GetSequenceActivity(int seq);
-	public native int LookupSequence(const char[] name);
-	public void ResetSequence(int sequence, bool force = false)
-	{
-		int entity = view_as<int>(this);
-		int old = GetEntProp(entity, Prop_Send, "m_nSequence");
-		bool changed = (old != sequence);
-		SetEntProp(entity, Prop_Send, "m_nSequence", sequence);
-		if(force || changed) {
-			SetEntPropFloat(entity, Prop_Data, "m_flAnimTime", GetGameTime());
-			SetEntPropFloat(entity, Prop_Send, "m_flCycle", 0.0);
-			this.ResetSequenceInfo();
-		}
-	}
-	public native float SequenceDuration(int sequence);
-	public native int SequenceNumFrames(int sequence);
-	public native float SequenceFPS(int sequence);
-	public native float SequenceCPS(int sequence);
-	public int SequenceFrame()
-	{
-		int entity = view_as<int>(this);
-
-		int sequence = GetEntProp(entity, Prop_Send, "m_nSequence");
-		int num_frames = this.SequenceNumFrames(sequence);
-
-		float cycle = GetEntPropFloat(entity, Prop_Send, "m_flCycle");
-		return RoundToFloor((cycle * float(num_frames)) / 1.0);
-	}
-
-	public native void SetHandleAnimEvent(handleanimevent_func_t func, any data = 0);
-	public native void HandleAnimEvent(animevent_tVar event);
-
-	public native bool GetIntervalMovement(bool &bMoveSeqFinished = false, float pos[3] = NULL_VECTOR, float ang[3] = NULL_VECTOR);
-	public native bool GetSequenceMovement(bool &bMoveSeqFinished = false, float pos[3] = NULL_VECTOR, float ang[3] = NULL_VECTOR);
-};
-
-methodmap BaseAnimatingOverlay < BaseAnimating
-{
-	public BaseAnimatingOverlay(int entity) { return view_as<BaseAnimatingOverlay>(entity); }
-
-	public native int AddGestureSequence1(int sequence, bool autokill=true);
-	public native int AddGestureSequence2(int sequence, float flDuration, bool autokill=true);
-	public native int AddGesture1(Activity activity, bool autokill=true);
-	public native int AddGesture2(Activity activity, float flDuration, bool autokill=true);
-	public native bool IsPlayingGesture(Activity activity);
-	public native void RestartGesture(Activity activity, bool addifmissing=true, bool autokill=true);
-	public native void RemoveGesture(Activity activity);
-	public native int AddLayeredSequence(int sequence, int iPriority);
-
-	public native void RemoveAllGestures();
-	public native void SetLayerPriority(int iLayer, int iPriority);
-	public native bool IsValidLayer(int iLayer);
-	public native void SetLayerDuration(int iLayer, float flDuration);
-	public native float GetLayerDuration(int iLayer);
-	public native void SetLayerCycle1(int iLayer, float flCycle);
-	public native void SetLayerCycle2(int iLayer, float flCycle, float flPrevCycle);
-	public native float GetLayerCycle(int iLayer);
-	public native void SetLayerPlaybackRate(int iLayer, float flPlaybackRate);
-	public native void SetLayerWeight(int iLayer, float flWeight);
-	public native float GetLayerWeight(int iLayer);
-	public native void SetLayerBlendIn(int iLayer, float flBlendIn);
-	public native void SetLayerBlendOut(int iLayer, float flBlendOut);
-	public native void SetLayerAutokill(int iLayer, bool bAutokill);
-	public native void SetLayerLooping(int iLayer, bool bLooping);
-	public native void SetLayerNoRestore(int iLayer, bool bNoRestore);
-	public native Activity GetLayerActivity(int iLayer);
-	public native int GetLayerSequence(int iLayer);
-	public native int FindGestureLayer(Activity activity);
-	public native void RemoveLayer(int iLayer, float flKillRate=0.2, float flKillDelay=0.0);
-	public native void FastRemoveLayer(int iLayer);
-	public native int GetNumAnimOverlays();
-	public native void SetNumAnimOverlays(int num);
-	public native void VerifyOrder();
-	public native bool HasActiveLayer();
-	public native int AllocateLayer(int iPriority=0);
-	public static native int MaxOverlays();
-};
-
-methodmap BaseFlex < BaseAnimatingOverlay
-{
-	public BaseFlex(int entity) { return view_as<BaseFlex>(entity); }
-
-	public native int GetNumFlexControllers();
-	public native int GetFlexControllerName(int id, char[] name, int len);
-	public native int FindFlexController(const char[] name);
-	public native void SetFlexWeight(int id, float value);
-	public native float GetFlexWeight(int id);
-};
+native int FlexGetNumFlexControllers(int entity);
+native int FlexGetFlexControllerName(int entity, int id, char[] name, int len);
+native int FlexFindFlexController(int entity, const char[] name);
+native void FlexSetFlexWeight(int entity, int id, float value);
+native float FlexGetFlexWeight(int entity, int id);
 
 native Activity ActivityList_IndexForName(const char[] name);
 native int ActivityList_NameForIndex(int id, char[] name, int len);
@@ -252,49 +211,47 @@ methodmap ModelInfo
 #if !defined REQUIRE_EXTENSIONS
 public void __ext_animhelpers_SetNTVOptional()
 {
-	MarkNativeAsOptional("BaseAnimating.BaseAnimating");
-	MarkNativeAsOptional("BaseAnimating.SelectWeightedSequence");
-	MarkNativeAsOptional("BaseAnimating.LookupSequence");
-	MarkNativeAsOptional("BaseAnimating.LookupActivity");
-	MarkNativeAsOptional("BaseAnimating.LookupPoseParameter");
-	MarkNativeAsOptional("BaseAnimating.SetPoseParameter");
-	MarkNativeAsOptional("BaseAnimating.GetPoseParameter");
+	MarkNativeAsOptional("AnimatingSelectWeightedSequence");
+	MarkNativeAsOptional("AnimatingLookupSequence");
+	MarkNativeAsOptional("AnimatingLookupActivity");
+	MarkNativeAsOptional("AnimatingLookupPoseParameter");
+	MarkNativeAsOptional("AnimatingSetPoseParameter");
+	MarkNativeAsOptional("AnimatingGetPoseParameter");
 
-	MarkNativeAsOptional("BaseAnimatingOverlay.BaseAnimatingOverlay");
-	MarkNativeAsOptional("BaseAnimatingOverlay.AddGestureSequence");
-	MarkNativeAsOptional("BaseAnimatingOverlay.AddGestureSequenceEx");
-	MarkNativeAsOptional("BaseAnimatingOverlay.AddGesture");
-	MarkNativeAsOptional("BaseAnimatingOverlay.AddGestureEx");
-	MarkNativeAsOptional("BaseAnimatingOverlay.IsPlayingGesture");
-	MarkNativeAsOptional("BaseAnimatingOverlay.RestartGesture");
-	MarkNativeAsOptional("BaseAnimatingOverlay.RemoveGesture");
-	MarkNativeAsOptional("BaseAnimatingOverlay.RemoveAllGestures");
-	MarkNativeAsOptional("BaseAnimatingOverlay.AddLayeredSequence");
-	MarkNativeAsOptional("BaseAnimatingOverlay.SetLayerPriority");
-	MarkNativeAsOptional("BaseAnimatingOverlay.IsValidLayer");
-	MarkNativeAsOptional("BaseAnimatingOverlay.SetLayerDuration");
-	MarkNativeAsOptional("BaseAnimatingOverlay.SetLayerCycle");
-	MarkNativeAsOptional("BaseAnimatingOverlay.SetLayerCycleEx");
-	MarkNativeAsOptional("BaseAnimatingOverlay.GetLayerCycle");
-	MarkNativeAsOptional("BaseAnimatingOverlay.SetLayerPlaybackRate");
-	MarkNativeAsOptional("BaseAnimatingOverlay.SetLayerWeight");
-	MarkNativeAsOptional("BaseAnimatingOverlay.GetLayerWeight");
-	MarkNativeAsOptional("BaseAnimatingOverlay.SetLayerBlendIn");
-	MarkNativeAsOptional("BaseAnimatingOverlay.SetLayerBlendOut");
-	MarkNativeAsOptional("BaseAnimatingOverlay.SetLayerAutokill");
-	MarkNativeAsOptional("BaseAnimatingOverlay.SetLayerLooping");
-	MarkNativeAsOptional("BaseAnimatingOverlay.SetLayerNoRestore");
-	MarkNativeAsOptional("BaseAnimatingOverlay.GetLayerActivity");
-	MarkNativeAsOptional("BaseAnimatingOverlay.GetLayerSequence");
-	MarkNativeAsOptional("BaseAnimatingOverlay.FindGestureLayer");
-	MarkNativeAsOptional("BaseAnimatingOverlay.RemoveLayer");
-	MarkNativeAsOptional("BaseAnimatingOverlay.FastRemoveLayer");
-	MarkNativeAsOptional("BaseAnimatingOverlay.GetNumAnimOverlays");
-	MarkNativeAsOptional("BaseAnimatingOverlay.SetNumAnimOverlays");
-	MarkNativeAsOptional("BaseAnimatingOverlay.VerifyOrder");
-	MarkNativeAsOptional("BaseAnimatingOverlay.HasActiveLayer");
-	MarkNativeAsOptional("BaseAnimatingOverlay.AllocateLayer");
-	MarkNativeAsOptional("BaseAnimatingOverlay.MaxOverlays");
+	MarkNativeAsOptional("AnimatingOverlayAddGestureSequence");
+	MarkNativeAsOptional("AnimatingOverlayAddGestureSequenceEx");
+	MarkNativeAsOptional("AnimatingOverlayAddGesture");
+	MarkNativeAsOptional("AnimatingOverlayAddGestureEx");
+	MarkNativeAsOptional("AnimatingOverlayIsPlayingGesture");
+	MarkNativeAsOptional("AnimatingOverlayRestartGesture");
+	MarkNativeAsOptional("AnimatingOverlayRemoveGesture");
+	MarkNativeAsOptional("AnimatingOverlayRemoveAllGestures");
+	MarkNativeAsOptional("AnimatingOverlayAddLayeredSequence");
+	MarkNativeAsOptional("AnimatingOverlaySetLayerPriority");
+	MarkNativeAsOptional("AnimatingOverlayIsValidLayer");
+	MarkNativeAsOptional("AnimatingOverlaySetLayerDuration");
+	MarkNativeAsOptional("AnimatingOverlaySetLayerCycle");
+	MarkNativeAsOptional("AnimatingOverlaySetLayerCycleEx");
+	MarkNativeAsOptional("AnimatingOverlayGetLayerCycle");
+	MarkNativeAsOptional("AnimatingOverlaySetLayerPlaybackRate");
+	MarkNativeAsOptional("AnimatingOverlaySetLayerWeight");
+	MarkNativeAsOptional("AnimatingOverlayGetLayerWeight");
+	MarkNativeAsOptional("AnimatingOverlaySetLayerBlendIn");
+	MarkNativeAsOptional("AnimatingOverlaySetLayerBlendOut");
+	MarkNativeAsOptional("AnimatingOverlaySetLayerAutokill");
+	MarkNativeAsOptional("AnimatingOverlaySetLayerLooping");
+	MarkNativeAsOptional("AnimatingOverlaySetLayerNoRestore");
+	MarkNativeAsOptional("AnimatingOverlayGetLayerActivity");
+	MarkNativeAsOptional("AnimatingOverlayGetLayerSequence");
+	MarkNativeAsOptional("AnimatingOverlayFindGestureLayer");
+	MarkNativeAsOptional("AnimatingOverlayRemoveLayer");
+	MarkNativeAsOptional("AnimatingOverlayFastRemoveLayer");
+	MarkNativeAsOptional("AnimatingOverlayGetNumAnimOverlays");
+	MarkNativeAsOptional("AnimatingOverlaySetNumAnimOverlays");
+	MarkNativeAsOptional("AnimatingOverlayVerifyOrder");
+	MarkNativeAsOptional("AnimatingOverlayHasActiveLayer");
+	MarkNativeAsOptional("AnimatingOverlayAllocateLayer");
+	MarkNativeAsOptional("AnimatingOverlayMaxOverlays");
 }
 #endif
 
