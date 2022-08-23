@@ -23,7 +23,7 @@ enum struct animevent_t
 native void EntityWorldSpaceCenter(int entity, float center[3]);
 native void EntitySetAbsOrigin(int entity, const float pos[3]);
 
-typedef handleanimevent_func_t = function Action (int entity, animevent_t event, any data);
+typedef handleanimevent_func_t = function Action (int entity, animevent_t event);
 
 native Activity AnimatingLookupActivity(int entity, const char[] name);
 native int AnimatingSelectWeightedSequence(int entity, Activity activity);
@@ -94,7 +94,7 @@ stock int AnimatingSequenceFrame(int entity)
 	return RoundToFloor((cycle * float(num_frames)) / 1.0);
 }
 
-native void AnimatingSetHandleAnimEvent(int entity, handleanimevent_func_t func, any data = 0);
+native void AnimatingHookHandleAnimEvent(int entity, handleanimevent_func_t func);
 native void AnimatingHandleAnimEvent(int entity, animevent_tVar event);
 
 native bool AnimatingGetIntervalMovement(int entity, bool &bMoveSeqFinished = false, float pos[3] = NULL_VECTOR, float ang[3] = NULL_VECTOR);

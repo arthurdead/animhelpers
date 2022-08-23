@@ -3061,13 +3061,12 @@ void AddrToAnimEvent(animevent_t *pEvent, const cell_t *addr)
 
 struct callback_holder_t
 {
-	IPluginFunction *callback = nullptr;
-	cell_t data = 0;
-	IdentityToken_t *owner = nullptr;
+	IChangeableForward *fwd = nullptr;
+	std::vector<IdentityToken_t *> owners{};
 	bool erase = true;
 	int ref = -1;
 	
-	callback_holder_t(CBaseEntity *pEntity, int ref_, IdentityToken_t *owner_);
+	callback_holder_t(CBaseEntity *pEntity, int ref_);
 	~callback_holder_t();
 
 	void dtor(CBaseEntity *pEntity)
@@ -3080,20 +3079,19 @@ struct callback_holder_t
 	
 	void HookHandleAnimEvent(animevent_t *pEvent)
 	{
-		if(!callback) {
+		if(!fwd || fwd->GetFunctionCount() == 0) {
 			RETURN_META(MRES_IGNORED);
 		}
 
-		cell_t addr[ANIMEVENT_STRUCT_SIZE_IN_CELL];
+		cell_t addr[ANIMEVENT_STRUCT_SIZE_IN_CELL]{0};
 		AnimEventToAddr(pEvent, addr);
 		
 		CBaseEntity *pEntity = META_IFACEPTR(CBaseEntity);
 		
-		callback->PushCell(gamehelpers->EntityToBCompatRef(pEntity));
-		callback->PushArray(addr, ANIMEVENT_STRUCT_SIZE_IN_CELL, SM_PARAM_COPYBACK);
-		callback->PushCell(data);
+		fwd->PushCell(gamehelpers->EntityToBCompatRef(pEntity));
+		fwd->PushArray(addr, ANIMEVENT_STRUCT_SIZE_IN_CELL, SM_PARAM_COPYBACK);
 		cell_t res = 0;
-		callback->Execute(&res);
+		fwd->Execute(&res);
 		
 		switch(res) {
 			case Pl_Continue: {
@@ -3127,17 +3125,23 @@ void callback_holder_t::HookEntityDtor()
 	RETURN_META(MRES_HANDLED);
 }
 
-callback_holder_t::callback_holder_t(CBaseEntity *pEntity, int ref_, IdentityToken_t *owner_)
-	: owner{owner_}, ref{ref_}
+callback_holder_t::callback_holder_t(CBaseEntity *pEntity, int ref_)
+	: ref{ref_}
 {
 	SH_ADD_MANUALHOOK(GenericDtor, pEntity, SH_MEMBER(this, &callback_holder_t::HookEntityDtor), false);
 	SH_ADD_MANUALHOOK(HandleAnimEvent, pEntity, SH_MEMBER(this, &callback_holder_t::HookHandleAnimEvent), false);
+
+	fwd = forwards->CreateForwardEx(nullptr, ET_Hook, 2, nullptr, Param_Cell, Param_Array);
 
 	callbackmap.emplace(ref, this);
 }
 
 callback_holder_t::~callback_holder_t()
 {
+	if(fwd) {
+		forwards->ReleaseForward(fwd);
+	}
+
 	if(erase) {
 		callbackmap.erase(ref);
 	}
@@ -3157,18 +3161,19 @@ static cell_t BaseAnimatingSetHandleAnimEvent(IPluginContext *pContext, const ce
 	callback_holder_map_t::iterator it{callbackmap.find(ref)};
 	if(it != callbackmap.end()) {
 		holder = it->second;
-
-		if(holder->owner != pContext->GetIdentity()) {
-			return pContext->ThrowNativeError("Another plugin already set this entity AnimEvent handler");
-		}
 	} else {
-		holder = new callback_holder_t{pEntity, ref, pContext->GetIdentity()};
+		holder = new callback_holder_t{pEntity, ref};
 	}
 	
-	IPluginFunction *callback = pContext->GetFunctionById(params[2]);
+	IPluginFunction *func = pContext->GetFunctionById(params[2]);
 
-	holder->callback = callback;
-	holder->data = params[3];
+	holder->fwd->RemoveFunction(func);
+	holder->fwd->AddFunction(func);
+
+	IdentityToken_t *iden{pContext->GetIdentity()};
+	if(std::find(holder->owners.cbegin(), holder->owners.cend(), iden) == holder->owners.cend()) {
+		holder->owners.emplace_back(iden);
+	}
 	
 	return 0;
 }
@@ -3787,7 +3792,7 @@ static const sp_nativeinfo_t g_sNativesInfo[] =
 	{"AnimatingSequenceCPS", BaseAnimatingSequenceCPS},
 	{"AnimatingGetBoneController", BaseAnimatingGetBoneControllerEx},
 	{"AnimatingSetBoneController", BaseAnimatingSetBoneControllerEx},
-	{"AnimatingSetHandleAnimEvent", BaseAnimatingSetHandleAnimEvent},
+	{"AnimatingHookHandleAnimEvent", BaseAnimatingSetHandleAnimEvent},
 	{"AnimatingHandleAnimEvent", BaseAnimatingHandleAnimEvent},
 	{"AnimatingGetIntervalMovement", BaseAnimatingGetIntervalMovement},
 	{"AnimatingGetSequenceMovement", BaseAnimatingGetSequenceMovement},
@@ -3864,16 +3869,29 @@ void Sample::OnPluginUnloaded(IPlugin *plugin)
 	callback_holder_map_t::iterator it{callbackmap.begin()};
 	while(it != callbackmap.end()) {
 		callback_holder_t *holder = it->second;
+		std::vector<IdentityToken_t *> &owners{holder->owners};
 
-		if(holder->owner == plugin->GetIdentity()) {
-			CBaseEntity *pEntity = gamehelpers->ReferenceToEntity(holder->ref);
-			if(pEntity) {
-				holder->dtor(pEntity);
+		auto it_own{std::find(owners.begin(), owners.end(), plugin->GetIdentity())};
+		if(it_own != owners.cend()) {
+			owners.erase(it_own);
+
+			size_t func_count{0};
+
+			if(holder->fwd) {
+				holder->fwd->RemoveFunctionsOfPlugin(plugin);
+				func_count += holder->fwd->GetFunctionCount();
 			}
-			holder->erase = false;
-			delete holder;
-			it = callbackmap.erase(it);
-			continue;
+
+			if(func_count == 0) {
+				CBaseEntity *pEntity = gamehelpers->ReferenceToEntity(holder->ref);
+				if(pEntity) {
+					holder->dtor(pEntity);
+				}
+				holder->erase = false;
+				delete holder;
+				it = callbackmap.erase(it);
+				continue;
+			}
 		}
 		
 		++it;
