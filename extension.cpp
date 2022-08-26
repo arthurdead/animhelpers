@@ -3117,7 +3117,7 @@ callback_holder_map_t callbackmap{};
 void callback_holder_t::HookEntityDtor()
 {
 	CBaseEntity *pEntity = META_IFACEPTR(CBaseEntity);
-	int this_ref = gamehelpers->EntityToBCompatRef(pEntity);
+	int this_ref = gamehelpers->EntityToReference(pEntity);
 	dtor(pEntity);
 	callbackmap.erase(this_ref);
 	erase = false;
@@ -3156,7 +3156,7 @@ static cell_t BaseAnimatingSetHandleAnimEvent(IPluginContext *pContext, const ce
 	
 	callback_holder_t *holder = nullptr;
 
-	int ref = gamehelpers->EntityToBCompatRef(pEntity);
+	int ref = gamehelpers->EntityToReference(pEntity);
 	
 	callback_holder_map_t::iterator it{callbackmap.find(ref)};
 	if(it != callbackmap.end()) {
