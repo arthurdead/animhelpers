@@ -144,7 +144,7 @@ native void FlexSetFlexWeight(int entity, int id, float value);
 native float FlexGetFlexWeight(int entity, int id);
 
 native Activity ActivityList_IndexForName(const char[] name);
-native int ActivityList_NameForIndex(int id, char[] name, int len);
+native int ActivityList_NameForIndex(Activity id, char[] name, int len);
 native Activity ActivityList_RegisterPrivateActivity(const char[] name);
 
 native int EventList_IndexForName(const char[] name);
