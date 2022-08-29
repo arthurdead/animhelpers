@@ -999,6 +999,7 @@ bool CBaseAnimating::GetBonePosition ( int iBone, Vector &origin, QAngle &angles
 	}
 	
 	MatrixAngles( bonetoworld, angles, origin );
+	return true;
 }
 
 int CBaseAnimating::LookupBone( const char *szName )
@@ -3999,4 +4000,14 @@ void Sample::DispatchAnimEvents(CBaseAnimating *pEntity)
 void Sample::ResetSequenceInfo(CBaseAnimating *pEntity)
 {
 	pEntity->ResetSequenceInfo();
+}
+
+const char *Sample::ActivityName(int activity)
+{
+	return ActivityList_NameForIndex(activity);
+}
+
+const char *Sample::SequenceName(CBaseAnimating *pEntity, int sequence)
+{
+	return pEntity->GetSequenceName(sequence);
 }

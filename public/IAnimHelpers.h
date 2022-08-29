@@ -22,6 +22,9 @@ public:
 	virtual void StudioFrameAdvance(CBaseAnimating *pEntity) = 0;
 	virtual void DispatchAnimEvents(CBaseAnimating *pEntity) = 0;
 	virtual void ResetSequenceInfo(CBaseAnimating *pEntity) = 0;
+
+	virtual const char *ActivityName(int activity) = 0;
+	virtual const char *SequenceName(CBaseAnimating *pEntity, int sequence) = 0;
 };
 
 #endif

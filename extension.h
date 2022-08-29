@@ -51,6 +51,8 @@ public:
 	virtual void StudioFrameAdvance(CBaseAnimating *pEntity);
 	virtual void DispatchAnimEvents(CBaseAnimating *pEntity);
 	virtual void ResetSequenceInfo(CBaseAnimating *pEntity);
+	virtual const char *ActivityName(int activity);
+	virtual const char *SequenceName(CBaseAnimating *pEntity, int sequence);
 
 	void OnCoreMapStart(edict_t *pEdictList, int edictCount, int clientMax);
 	

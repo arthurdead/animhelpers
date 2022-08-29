@@ -70,12 +70,13 @@ native int AnimatingLookupSequence(int entity, const char[] name);
 
 stock void AnimatingResetSequence(int entity, int sequence, bool force = false)
 {
+	if(!GetEntProp(entity, Prop_Data, "m_bSequenceLoops")) {
+		SetEntPropFloat(entity, Prop_Send, "m_flCycle", 0.0);
+	}
 	int old = GetEntProp(entity, Prop_Send, "m_nSequence");
 	bool changed = (old != sequence);
 	SetEntProp(entity, Prop_Send, "m_nSequence", sequence);
-	if(force || changed) {
-		SetEntPropFloat(entity, Prop_Data, "m_flAnimTime", GetGameTime());
-		SetEntPropFloat(entity, Prop_Send, "m_flCycle", 0.0);
+	if(changed || !GetEntProp(entity, Prop_Data, "m_bSequenceLoops")) {
 		AnimatingResetSequenceInfo(entity);
 	}
 }
