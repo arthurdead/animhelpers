@@ -48,7 +48,7 @@ native bool AnimatingGetAttachmentLocal(int entity, int id, float absOrigin[3] =
 native bool AnimatingGetAttachmentMatrix(int entity, int id, float matrix[3][4]);
 
 native int AnimatingGetNumBones(int entity);
-native int AnimatingGetBoneName(int id, char[] name, int len);
+native int AnimatingGetBoneName(int entity, int id, char[] name, int len);
 native int AnimatingLookupBone(int entity, const char[] name);
 native bool AnimatingGetBonePosition(int entity, int id, float absOrigin[3] = NULL_VECTOR, float absAngles[3] = NULL_VECTOR);
 native bool AnimatingGetBonePositionLocal(int entity, int id, float absOrigin[3] = NULL_VECTOR, float absAngles[3] = NULL_VECTOR);

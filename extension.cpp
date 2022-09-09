@@ -497,9 +497,9 @@ public:
 		return call_vfunc<bool, CBaseAnimating, int, matrix3x4_t &>(this, CBaseAnimatingGetAttachment, iAttachment, attachmentToWorld);
 	}
 	
-	bool GetBoneTransform( int iAttachment, matrix3x4_t &attachmentToWorld )
+	void GetBoneTransform( int iAttachment, matrix3x4_t &attachmentToWorld )
 	{
-		return call_vfunc<bool, CBaseAnimating, int, matrix3x4_t &>(this, CBaseAnimatingGetBoneTransform, iAttachment, attachmentToWorld);
+		call_vfunc<void, CBaseAnimating, int, matrix3x4_t &>(this, CBaseAnimatingGetBoneTransform, iAttachment, attachmentToWorld);
 	}
 	
 	void ResetSequenceInfo()
@@ -770,11 +770,11 @@ bool CBaseAnimating::GetAttachmentLocal( int iAttachment, matrix3x4_t &attachmen
 bool CBaseAnimating::GetBonePositionLocal( int iAttachment, matrix3x4_t &attachmentToLocal )
 {
 	matrix3x4_t attachmentToWorld;
-	bool bRet = GetBoneTransform(iAttachment, attachmentToWorld);
+	GetBoneTransform(iAttachment, attachmentToWorld);
 	matrix3x4_t worldToEntity;
 	MatrixInvert( EntityToWorldTransform(), worldToEntity );
 	ConcatTransforms( worldToEntity, attachmentToWorld, attachmentToLocal ); 
-	return bRet;
+	return true;
 }
 
 int CBaseAnimating::GetAttachmentBone( int iAttachment )
@@ -994,9 +994,7 @@ bool CBaseAnimating::GetBonePosition ( int iBone, Vector &origin, QAngle &angles
 	}
 
 	matrix3x4_t bonetoworld;
-	if(!GetBoneTransform( iBone, bonetoworld )) {
-		return false;
-	}
+	GetBoneTransform( iBone, bonetoworld );
 	
 	MatrixAngles( bonetoworld, angles, origin );
 	return true;
