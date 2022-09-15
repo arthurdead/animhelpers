@@ -246,186 +246,7 @@ methodmap ModelInfo
 	public static native int GetNumWorldSubmodels();
 };
 
-static Regex __animhelpers_vmt_cond_regex;
-
-static bool __animhelpers_is_vmt_cond(const char[] name)
-{
-	return __animhelpers_vmt_cond_regex.Match(name) > 0;
-}
-
-static void __animhelpers_lowerstr(char[] name)
-{
-	int i = 0;
-	while(name[i++] != '\0') {
-		name[i] = CharToLower(name[i]);
-	}
-}
-
-static char __animhelpers_vmt_varname[64];
-static char __animhelpers_vmt_varvalue[PLATFORM_MAX_PATH];
-
-static void __animhelpers_parse_material_dl(KeyValues mat)
-{
-	if(mat.GotoFirstSubKey(false)) {
-		do {
-			mat.GetSectionName(__animhelpers_vmt_varname, sizeof(__animhelpers_vmt_varname));
-			__animhelpers_lowerstr(__animhelpers_vmt_varname);
-
-			if(StrContains(__animhelpers_vmt_varname, "360?") == 0) {
-				continue;
-			}
-
-			mat.GetString(NULL_STRING, __animhelpers_vmt_varvalue, PLATFORM_MAX_PATH);
-
-			if(StrEqual(__animhelpers_vmt_varname, "$basetexture") ||
-				StrEqual(__animhelpers_vmt_varname, "$lightwarptexture") ||
-				StrEqual(__animhelpers_vmt_varname, "$bumpmap") ||
-				StrEqual(__animhelpers_vmt_varname, "$phongexponenttexture") ||
-				StrEqual(__animhelpers_vmt_varname, "$sheenmap") ||
-				StrEqual(__animhelpers_vmt_varname, "$sheenmapmask") ||
-				StrEqual(__animhelpers_vmt_varname, "$phongexponenttexture")) {
-				Format(__animhelpers_vmt_varvalue, PLATFORM_MAX_PATH, "materials/%s.vtf", __animhelpers_vmt_varvalue);
-				AddFileToDownloadsTable(__animhelpers_vmt_varvalue);
-			} else if(StrEqual(__animhelpers_vmt_varname, "$detail")) {
-				Format(__animhelpers_vmt_varvalue, PLATFORM_MAX_PATH, "materials/%s", __animhelpers_vmt_varvalue);
-				AddFileToDownloadsTable(__animhelpers_vmt_varvalue);
-			} else if(StrEqual(__animhelpers_vmt_varname, "insert") ||
-						__animhelpers_is_vmt_cond(__animhelpers_vmt_varname)) {
-				__animhelpers_parse_material_dl(mat);
-			} else if(StrEqual(__animhelpers_vmt_varname, "include")) {
-				KeyValues inc = new KeyValues("");
-				if(inc.ImportFromFile(__animhelpers_vmt_varvalue)) {
-					__animhelpers_parse_material_dl(inc);
-				}
-				delete inc;
-			}
-		} while(mat.GotoNextKey(false));
-		mat.GoBack();
-	}
-}
-
-static void __animhelpers_incmdl_dl(const char[] filename)
-{
-	AddFileToDownloadsTable(filename);
-
-	int idx = ModelInfo.GetModelIndex(filename);
-	if(idx == -1) {
-		idx = PrecacheModel(filename);
-	}
-
-	StudioModel mdl = view_as<StudioModel>(ModelInfo.GetModel(idx));
-	if(mdl == StudioModel_Null) {
-		return;
-	}
-
-	mdl.GetAnimBlockPath(__animhelpers_vmt_varvalue, PLATFORM_MAX_PATH);
-	if(__animhelpers_vmt_varvalue[0] != '\0') {
-		AddFileToDownloadsTable(__animhelpers_vmt_varvalue);
-	}
-
-	int num_incmdls = mdl.IncludedModels;
-	for(int i = 0; i < num_incmdls; ++i) {
-		mdl.GetIncludedModelPath(i, __animhelpers_vmt_varvalue, PLATFORM_MAX_PATH);
-		if(__animhelpers_vmt_varvalue[0] != '\0') {
-			__animhelpers_incmdl_dl(__animhelpers_vmt_varvalue);
-		}
-	}
-}
-
-stock void AddModelToDownloadsTable(const char[] filename)
-{
-	AddFileToDownloadsTable(filename);
-
-	int idx = ModelInfo.GetModelIndex(filename);
-	if(idx == -1) {
-		idx = PrecacheModel(filename);
-	}
-
-	int mdl_str_idx = StrContains(filename, ".mdl");
-	if(mdl_str_idx != -1) {
-		filename[mdl_str_idx] = '\0';
-	}
-
-	//TODO!!!! get the path from the model itself
-
-	FormatEx(__animhelpers_vmt_varvalue, PLATFORM_MAX_PATH, "%s.vdd", filename);
-	if(FileExists(__animhelpers_vmt_varvalue, true)) {
-		AddFileToDownloadsTable(__animhelpers_vmt_varvalue);
-	}
-
-	FormatEx(__animhelpers_vmt_varvalue, PLATFORM_MAX_PATH, "%s.phy", filename);
-	if(FileExists(__animhelpers_vmt_varvalue, true)) {
-		AddFileToDownloadsTable(__animhelpers_vmt_varvalue);
-	}
-
-	FormatEx(__animhelpers_vmt_varvalue, PLATFORM_MAX_PATH, "%s.vtx", filename);
-	if(FileExists(__animhelpers_vmt_varvalue, true)) {
-		AddFileToDownloadsTable(__animhelpers_vmt_varvalue);
-	}
-
-	FormatEx(__animhelpers_vmt_varvalue, PLATFORM_MAX_PATH, "%s.dx90.vtx", filename);
-	if(FileExists(__animhelpers_vmt_varvalue, true)) {
-		AddFileToDownloadsTable(__animhelpers_vmt_varvalue);
-	}
-
-	FormatEx(__animhelpers_vmt_varvalue, PLATFORM_MAX_PATH, "%s.dx80.vtx", filename);
-	if(FileExists(__animhelpers_vmt_varvalue, true)) {
-		AddFileToDownloadsTable(__animhelpers_vmt_varvalue);
-	}
-
-	FormatEx(__animhelpers_vmt_varvalue, PLATFORM_MAX_PATH, "%s.sw.vtx", filename);
-	if(FileExists(__animhelpers_vmt_varvalue, true)) {
-		AddFileToDownloadsTable(__animhelpers_vmt_varvalue);
-	}
-
-	StudioModel mdl = view_as<StudioModel>(ModelInfo.GetModel(idx));
-	if(mdl == StudioModel_Null) {
-		return;
-	}
-
-	mdl.GetAnimBlockPath(__animhelpers_vmt_varvalue, PLATFORM_MAX_PATH);
-	if(__animhelpers_vmt_varvalue[0] != '\0') {
-		AddFileToDownloadsTable(__animhelpers_vmt_varvalue);
-	}
-
-	int num_incmdls = mdl.IncludedModels;
-	for(int i = 0; i < num_incmdls; ++i) {
-		mdl.GetIncludedModelPath(i, __animhelpers_vmt_varvalue, PLATFORM_MAX_PATH);
-		if(__animhelpers_vmt_varvalue[0] != '\0') {
-			__animhelpers_incmdl_dl(__animhelpers_vmt_varvalue);
-		}
-	}
-
-	if(__animhelpers_vmt_cond_regex == null) {
-		char err[128];
-		RegexError errcode = REGEX_ERROR_NONE;
-		__animhelpers_vmt_cond_regex = new Regex(
-			"(?:[a-z]_)?(?:(?:(?:[<>][=]?)|hdr_)?dx(?:(?:9[05](?:_20b)?)|6)|hdr|ldr|srgb)"
-			, 0, err, sizeof(err), errcode
-		);
-		if(errcode != REGEX_ERROR_NONE) {
-			SetFailState("[ANIMHELPERS] failed to create vmt conditional regex: %s (%i)", err, errcode);
-		}
-	}
-
-	int num_lods = mdl.LODCount;
-	for(int j = 0; j < num_lods; ++j) {
-		StudioModelLOD lod = mdl.GetLOD(j);
-
-		int num_mat = lod.MaterialCount;
-		for(int i = 0; i < num_mat; ++i) {
-			lod.GetMaterialName(i, __animhelpers_vmt_varvalue, PLATFORM_MAX_PATH);
-			FormatEx(__animhelpers_vmt_varvalue, PLATFORM_MAX_PATH, "materials/%s.vmt", __animhelpers_vmt_varvalue);
-			AddFileToDownloadsTable(__animhelpers_vmt_varvalue);
-
-			KeyValues mat = new KeyValues("");
-			if(mat.ImportFromFile(__animhelpers_vmt_varvalue)) {
-				__animhelpers_parse_material_dl(mat);
-			}
-			delete mat;
-		}
-	}
-}
+native void AddModelToDownloadsTable(const char[] filename);
 
 #if !defined REQUIRE_EXTENSIONS
 public void __ext_animhelpers_SetNTVOptional()
@@ -489,5 +310,16 @@ public Extension __ext_animhelpers =
 	required=1,
 #else
 	required=0,
+#endif
+};
+
+public SharedPlugin __pl_animhelpers =
+{
+	name = "animhelpers",
+	file = "animhelpers.smx",
+#if defined REQUIRE_PLUGIN
+	required = 1,
+#else
+	required = 0,
 #endif
 };
