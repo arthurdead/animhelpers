@@ -129,9 +129,7 @@ static void add_incmdl_to_dltable(const char[] filename)
 	int num_incmdls = mdl.IncludedModels;
 	for(int i = 0; i < num_incmdls; ++i) {
 		mdl.GetIncludedModelPath(i, vmt_varvalue, PLATFORM_MAX_PATH);
-		if(vmt_varvalue[0] != '\0') {
-			add_incmdl_to_dltable(vmt_varvalue);
-		}
+		add_incmdl_to_dltable(vmt_varvalue);
 	}
 }
 
@@ -199,9 +197,7 @@ static int native_AddModelToDownloadsTable(Handle plugin, int params)
 	int num_incmdls = mdl.IncludedModels;
 	for(int i = 0; i < num_incmdls; ++i) {
 		mdl.GetIncludedModelPath(i, vmt_varvalue, PLATFORM_MAX_PATH);
-		if(vmt_varvalue[0] != '\0') {
-			add_incmdl_to_dltable(vmt_varvalue);
-		}
+		add_incmdl_to_dltable(vmt_varvalue);
 	}
 
 	int num_lods = mdl.LODCount;
