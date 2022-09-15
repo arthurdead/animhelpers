@@ -3335,12 +3335,6 @@ static cell_t Model_tRadiusget(IPluginContext *pContext, const cell_t *params)
 	return sp_ftoc(modelinfo->GetModelRadius(mod));
 }
 
-static cell_t Model_tMaterialCountget(IPluginContext *pContext, const cell_t *params)
-{
-	model_t *mod = (model_t *)params[1];
-	return modelinfo->GetModelMaterialCount(mod);
-}
-
 struct msurface2_t;
 typedef msurface2_t *SurfaceHandle_t;
 
@@ -3599,32 +3593,48 @@ struct model_t
 	};
 };
 
-const char *GetModelMaterialName(model_t *pModel, int idx)
+int GetModelMaterialCount(model_t *pModel)
 {
-	switch( modelinfo->GetModelType(pModel) )
-	{
-		case mod_brush:
-		{
-			if(!pModel->brush.pShared) {
-				return "";
-			}
-			
-			SurfaceHandle_t surfID = SurfaceHandleFromIndex( pModel->brush.firstmodelsurface + idx, pModel->brush.pShared );
-			
-			IMaterial *pMat = MSurf_TexInfo( surfID, pModel->brush.pShared )->material;
-			
-			return pMat->GetName();
+	switch(modelinfo->GetModelType(pModel)) {
+		case mod_brush: {
+			return modelinfo->GetModelMaterialCount(pModel);
 		}
-		case mod_studio:
-		{
-			studiohdr_t *pStudioHdr = mdlcache->GetStudioHdr( pModel->studio );
-			
-			const char *textureName = pStudioHdr->pTexture( idx )->pszName();
-			
-			return textureName;
+		case mod_studio: {
+			MDLHandle_t studio = modelinfo->GetCacheHandle(pModel);
+			studiohwdata_t *pHWDdata = mdlcache->GetHardwareData(studio);
+			if(!pHWDdata) {
+				return 0;
+			}
+			studioloddata_t *pLOD = &pHWDdata->m_pLODs[pHWDdata->m_RootLOD];
+			return pLOD->numMaterials;
 		}
 	}
-	
+
+	return 0;
+}
+
+const char *GetModelMaterialName(model_t *pModel, int idx)
+{
+	switch(modelinfo->GetModelType(pModel)) {
+		case mod_brush: {
+			if(pModel->brush.pShared) {
+				SurfaceHandle_t surfID = SurfaceHandleFromIndex(pModel->brush.firstmodelsurface + idx, pModel->brush.pShared);
+				IMaterial *pMat = MSurf_TexInfo(surfID, pModel->brush.pShared)->material;
+				return pMat->GetName();
+			}
+		} break;
+		case mod_studio: {
+			MDLHandle_t studio = modelinfo->GetCacheHandle(pModel);
+			studiohwdata_t *pHWDdata = mdlcache->GetHardwareData(studio);
+			if(!pHWDdata) {
+				return 0;
+			}
+			studioloddata_t *pLOD = &pHWDdata->m_pLODs[pHWDdata->m_RootLOD];
+			IMaterial *pMat = pLOD->ppMaterials[idx];
+			return pMat->GetName();
+		}
+	}
+
 	return "";
 }
 
@@ -3633,6 +3643,105 @@ static cell_t Model_tGetMaterialName(IPluginContext *pContext, const cell_t *par
 	model_t *mod = (model_t *)params[1];
 	
 	const char *ptr = GetModelMaterialName(mod, params[2]);
+
+	size_t written = 0;
+	pContext->StringToLocalUTF8(params[3], params[4], ptr, &written);
+	return written;
+}
+
+static cell_t Model_tMaterialCountget(IPluginContext *pContext, const cell_t *params)
+{
+	model_t *mod = (model_t *)params[1];
+	return GetModelMaterialCount(mod);
+}
+
+static cell_t StudioModelLODCountget(IPluginContext *pContext, const cell_t *params)
+{
+	model_t *mod = (model_t *)params[1];
+
+	MDLHandle_t studio = modelinfo->GetCacheHandle(mod);
+	studiohwdata_t *pHWDdata = mdlcache->GetHardwareData(studio);
+	if(!pHWDdata) {
+		return 0;
+	}
+
+	return pHWDdata->m_NumLODs;
+}
+
+static cell_t StudioModelRootLODget(IPluginContext *pContext, const cell_t *params)
+{
+	model_t *mod = (model_t *)params[1];
+
+	MDLHandle_t studio = modelinfo->GetCacheHandle(mod);
+	studiohwdata_t *pHWDdata = mdlcache->GetHardwareData(studio);
+	if(!pHWDdata) {
+		return 0;
+	}
+
+	return pHWDdata->m_RootLOD;
+}
+
+static cell_t StudioModelGetLOD(IPluginContext *pContext, const cell_t *params)
+{
+	model_t *mod = (model_t *)params[1];
+
+	MDLHandle_t studio = modelinfo->GetCacheHandle(mod);
+	studiohwdata_t *pHWDdata = mdlcache->GetHardwareData(studio);
+	if(!pHWDdata) {
+		return 0;
+	}
+
+	return (cell_t)(&pHWDdata->m_pLODs[params[2]]);
+}
+
+static cell_t StudioModelIncludedModelsget(IPluginContext *pContext, const cell_t *params)
+{
+	model_t *mod = (model_t *)params[1];
+
+	studiohdr_t *pStudio = modelinfo->GetStudiomodel(mod);
+
+	return pStudio->numincludemodels;
+}
+
+static cell_t StudioModelGetIncludedModel(IPluginContext *pContext, const cell_t *params)
+{
+	model_t *mod = (model_t *)params[1];
+
+	studiohdr_t *pStudio = modelinfo->GetStudiomodel(mod);
+	mstudiomodelgroup_t *modelgroup = pStudio->pModelGroup(params[2]);
+
+	const char *ptr = modelgroup->pszName();
+
+	size_t written = 0;
+	pContext->StringToLocalUTF8(params[3], params[4], ptr, &written);
+	return written;
+}
+
+static cell_t StudioModelGetAnimBlockName(IPluginContext *pContext, const cell_t *params)
+{
+	model_t *mod = (model_t *)params[1];
+
+	studiohdr_t *pStudio = modelinfo->GetStudiomodel(mod);
+
+	const char *ptr = pStudio->pszAnimBlockName();
+
+	size_t written = 0;
+	pContext->StringToLocalUTF8(params[2], params[3], ptr, &written);
+	return written;
+}
+
+static cell_t StudioModelLODMaterialCountget(IPluginContext *pContext, const cell_t *params)
+{
+	studioloddata_t *mod = (studioloddata_t *)params[1];
+
+	return mod->numMaterials;
+}
+
+static cell_t StudioModelLODGetMaterialName(IPluginContext *pContext, const cell_t *params)
+{
+	studioloddata_t *mod = (studioloddata_t *)params[1];
+
+	const char *ptr = mod->ppMaterials[params[2]]->GetName();
 
 	size_t written = 0;
 	pContext->StringToLocalUTF8(params[3], params[4], ptr, &written);
@@ -3668,60 +3777,11 @@ CModelLoader *modelloader = nullptr;
 static cell_t ModelInfoNumWorldSubmodelsget(IPluginContext *pContext, const cell_t *params)
 {
 	const model_t *mod = modelinfo->GetModel(1);
-	
-	return mod->brush.pShared->numsubmodels;
-}
-
-static cell_t ModelInfoGetWorldSubmodelOrigin(IPluginContext *pContext, const cell_t *params)
-{
-	const model_t *mod = modelinfo->GetModel(1);
-	
-	return 0;
-}
-
-std::vector<dmodel_t> mapmodels{};
-
-template <typename T>
-void ReadMapLump(const char *mapname, int id, std::vector<T> &lumps)
-{
-	FileHandle_t maphndl = filesystem->Open(mapname, "r", "GAME");
-	
-	dheader_t header{};
-	filesystem->Read(&header, sizeof(dheader_t), maphndl);
-	
-	lump_t &mdllump = header.lumps[id];
-	
-	filesystem->Seek(maphndl, mdllump.fileofs, FILESYSTEM_SEEK_HEAD);
-	
-	unsigned nOffsetAlign, nSizeAlign, nBufferAlign;
-	bool bTryOptimal = filesystem->GetOptimalIOConstraints( maphndl, &nOffsetAlign, &nSizeAlign, &nBufferAlign );
-
-	if ( bTryOptimal )
-	{
-		bTryOptimal = ( mdllump.fileofs % 4 == 0 ); // Don't return badly aligned data
+	if(mod && mod->brush.pShared) {
+		return mod->brush.pShared->numsubmodels;
+	} else {
+		return 0;
 	}
-
-	unsigned int alignedOffset = mdllump.fileofs;
-	unsigned int alignedBytesToRead = ( ( mdllump.filelen ) ? mdllump.filelen : 1 );
-
-	if ( bTryOptimal )
-	{
-		alignedOffset = AlignValue( ( alignedOffset - nOffsetAlign ) + 1, nOffsetAlign );
-		alignedBytesToRead = AlignValue( ( mdllump.fileofs - alignedOffset ) + alignedBytesToRead, nSizeAlign );
-	}
-
-	byte *rawdata = (byte *)filesystem->AllocOptimalReadBuffer( maphndl, alignedBytesToRead, alignedOffset );
-	
-	filesystem->Seek( maphndl, alignedOffset, FILESYSTEM_SEEK_HEAD );
-	filesystem->ReadEx( rawdata, alignedBytesToRead, alignedBytesToRead, maphndl );
-	
-	T *data = (T *)(rawdata + ( mdllump.fileofs - alignedOffset ));
-	
-	__asm__("int3");
-	
-	filesystem->FreeOptimalReadBuffer(rawdata);
-	
-	filesystem->Close(maphndl);
 }
 
 void Sample::OnCoreMapStart(edict_t *pEdictList, int edictCount, int clientMax)
@@ -3735,15 +3795,6 @@ void Sample::OnCoreMapStart(edict_t *pEdictList, int edictCount, int clientMax)
 	EventList_Init();
 	EventList_RegisterSharedEvents();
 #endif
-	
-	mapmodels.clear();
-	
-	const model_t *mod = modelinfo->GetModel(1);
-	
-	char mapname[MAX_OSPATH];
-	filesystem->String(mod->fnHandle, mapname, sizeof(mapname));
-	
-	//ReadMapLump(mapname, LUMP_MODELS, mapmodels);
 }
 
 static const sp_nativeinfo_t g_sNativesInfo[] =
@@ -3839,17 +3890,24 @@ static const sp_nativeinfo_t g_sNativesInfo[] =
 	{"EventList_IndexForName", EventList_IndexForNameNative},
 	{"EventList_NameForIndex", EventList_NameForIndexNative},
 	{"EventList_RegisterPrivateEvent", EventList_RegisterPrivateEventNative},
-	{"Model_t.Type.get", Model_tTypeget},
-	{"Model_t.GetName", Model_tGetName},
-	{"Model_t.GetBounds", Model_tGetBounds},
-	{"Model_t.GetRenderBounds", Model_tGetRenderBounds},
-	{"Model_t.Radius.get", Model_tRadiusget},
-	{"Model_t.MaterialCount.get", Model_tMaterialCountget},
-	{"Model_t.GetMaterialName", Model_tGetMaterialName},
+	{"BaseModel.Type.get", Model_tTypeget},
+	{"BaseModel.GetName", Model_tGetName},
+	{"BaseModel.GetBounds", Model_tGetBounds},
+	{"BaseModel.GetRenderBounds", Model_tGetRenderBounds},
+	{"BaseModel.Radius.get", Model_tRadiusget},
+	{"BaseModel.MaterialCount.get", Model_tMaterialCountget},
+	{"BaseModel.GetMaterialName", Model_tGetMaterialName},
+	{"StudioModel.LODCount.get", StudioModelLODCountget},
+	{"StudioModel.RootLOD.get", StudioModelRootLODget},
+	{"StudioModel.IncludedModels.get", StudioModelIncludedModelsget},
+	{"StudioModel.GetIncludedModelPath", StudioModelGetIncludedModel},
+	{"StudioModel.GetAnimBlockPath", StudioModelGetAnimBlockName},
+	{"StudioModel.GetLOD", StudioModelGetLOD},
+	{"StudioModelLOD.MaterialCount.get", StudioModelLODMaterialCountget},
+	{"StudioModelLOD.GetMaterialName", StudioModelLODGetMaterialName},
 	{"ModelInfo.GetModelIndex", ModelInfoGetModelIndex},
 	{"ModelInfo.GetModel", ModelInfoGetModel},
 	{"ModelInfo.GetNumWorldSubmodels", ModelInfoNumWorldSubmodelsget},
-	{"ModelInfo.GetWorldSubmodelOrigin", ModelInfoGetWorldSubmodelOrigin},
 	{nullptr, nullptr},
 };
 

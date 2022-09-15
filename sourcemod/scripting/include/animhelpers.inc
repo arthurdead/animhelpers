@@ -4,6 +4,7 @@
 #define animhelpers_included
 
 #include <sdktools>
+#include <regex>
 
 enum struct animevent_t
 {
@@ -158,20 +159,20 @@ stock bool EntityIsFlex(int entity) { return HasEntProp(entity, Prop_Send, "m_fl
 
 enum model_type_t
 {
-	model_bad, 
-	model_brush, 
-	model_sprite, 
+	model_bad,
+	model_brush,
+	model_sprite,
 	model_studio
 };
 
-methodmap Model_t
+methodmap BaseModel
 {
 	property model_type_t Type
 	{
 		public native get();
 	}
 
-	public native void GetName(char[] name, int length);
+	public native int GetName(char[] name, int length);
 	public native void GetBounds(float mins[3], float maxs[3]);
 	public native void GetRenderBounds(float mins[3], float maxs[3]);
 
@@ -185,15 +186,53 @@ methodmap Model_t
 		public native get();
 	}
 
-	public native void GetMaterialName(int idx, char[] name, int len);
+	public native int GetMaterialName(int idx, char[] name, int len);
 };
 
-#define Model_Null (view_as<Model_t>(Address_Null))
+#define BaseModel_Null (view_as<BaseModel>(Address_Null))
+
+methodmap StudioModelLOD
+{
+	property int MaterialCount
+	{
+		public native get();
+	}
+
+	public native int GetMaterialName(int idx, char[] name, int len);
+};
+
+#define StudioModelLOD_Null (view_as<StudioModelLOD>(Address_Null))
+
+methodmap StudioModel < BaseModel
+{
+	property int LODCount
+	{
+		public native get();
+	}
+
+	property int RootLOD
+	{
+		public native get();
+	}
+
+	public native StudioModelLOD GetLOD(int idx);
+
+	property int IncludedModels
+	{
+		public native get();
+	}
+
+	public native int GetIncludedModelPath(int idx, char[] name, int len);
+
+	public native int GetAnimBlockPath(char[] name, int len);
+};
+
+#define StudioModel_Null (view_as<StudioModel>(Address_Null))
 
 methodmap ModelInfo
 {
 	public static native int GetModelIndex(const char[] name);
-	public static native Model_t GetModel(int idx);
+	public static native BaseModel GetModel(int idx);
 
 	public static int GetNumModels()
 	{
@@ -205,9 +244,188 @@ methodmap ModelInfo
 	}
 
 	public static native int GetNumWorldSubmodels();
-
-	public static native void GetWorldSubmodelOrigin(int idx, float vec[3]);
 };
+
+static Regex __animhelpers_vmt_cond_regex;
+
+static bool __animhelpers_is_vmt_cond(const char[] name)
+{
+	return __animhelpers_vmt_cond_regex.Match(name) > 0;
+}
+
+static void __animhelpers_lowerstr(char[] name)
+{
+	int i = 0;
+	while(name[i++] != '\0') {
+		name[i] = CharToLower(name[i]);
+	}
+}
+
+static char __animhelpers_vmt_varname[64];
+static char __animhelpers_vmt_varvalue[PLATFORM_MAX_PATH];
+
+static void __animhelpers_parse_material_dl(KeyValues mat)
+{
+	if(mat.GotoFirstSubKey(false)) {
+		do {
+			mat.GetSectionName(__animhelpers_vmt_varname, sizeof(__animhelpers_vmt_varname));
+			__animhelpers_lowerstr(__animhelpers_vmt_varname);
+
+			if(StrContains(__animhelpers_vmt_varname, "360?") == 0) {
+				continue;
+			}
+
+			mat.GetString(NULL_STRING, __animhelpers_vmt_varvalue, PLATFORM_MAX_PATH);
+
+			if(StrEqual(__animhelpers_vmt_varname, "$basetexture") ||
+				StrEqual(__animhelpers_vmt_varname, "$lightwarptexture") ||
+				StrEqual(__animhelpers_vmt_varname, "$bumpmap") ||
+				StrEqual(__animhelpers_vmt_varname, "$phongexponenttexture") ||
+				StrEqual(__animhelpers_vmt_varname, "$sheenmap") ||
+				StrEqual(__animhelpers_vmt_varname, "$sheenmapmask") ||
+				StrEqual(__animhelpers_vmt_varname, "$phongexponenttexture")) {
+				Format(__animhelpers_vmt_varvalue, PLATFORM_MAX_PATH, "materials/%s.vtf", __animhelpers_vmt_varvalue);
+				AddFileToDownloadsTable(__animhelpers_vmt_varvalue);
+			} else if(StrEqual(__animhelpers_vmt_varname, "$detail")) {
+				Format(__animhelpers_vmt_varvalue, PLATFORM_MAX_PATH, "materials/%s", __animhelpers_vmt_varvalue);
+				AddFileToDownloadsTable(__animhelpers_vmt_varvalue);
+			} else if(StrEqual(__animhelpers_vmt_varname, "insert") ||
+						__animhelpers_is_vmt_cond(__animhelpers_vmt_varname)) {
+				__animhelpers_parse_material_dl(mat);
+			} else if(StrEqual(__animhelpers_vmt_varname, "include")) {
+				KeyValues inc = new KeyValues("");
+				if(inc.ImportFromFile(__animhelpers_vmt_varvalue)) {
+					__animhelpers_parse_material_dl(inc);
+				}
+				delete inc;
+			}
+		} while(mat.GotoNextKey(false));
+		mat.GoBack();
+	}
+}
+
+static void __animhelpers_incmdl_dl(const char[] filename)
+{
+	AddFileToDownloadsTable(filename);
+
+	int idx = ModelInfo.GetModelIndex(filename);
+	if(idx == -1) {
+		idx = PrecacheModel(filename);
+	}
+
+	StudioModel mdl = view_as<StudioModel>(ModelInfo.GetModel(idx));
+	if(mdl == StudioModel_Null) {
+		return;
+	}
+
+	mdl.GetAnimBlockPath(__animhelpers_vmt_varvalue, PLATFORM_MAX_PATH);
+	if(__animhelpers_vmt_varvalue[0] != '\0') {
+		AddFileToDownloadsTable(__animhelpers_vmt_varvalue);
+	}
+
+	int num_incmdls = mdl.IncludedModels;
+	for(int i = 0; i < num_incmdls; ++i) {
+		mdl.GetIncludedModelPath(i, __animhelpers_vmt_varvalue, PLATFORM_MAX_PATH);
+		if(__animhelpers_vmt_varvalue[0] != '\0') {
+			__animhelpers_incmdl_dl(__animhelpers_vmt_varvalue);
+		}
+	}
+}
+
+stock void AddModelToDownloadsTable(const char[] filename)
+{
+	AddFileToDownloadsTable(filename);
+
+	int idx = ModelInfo.GetModelIndex(filename);
+	if(idx == -1) {
+		idx = PrecacheModel(filename);
+	}
+
+	int mdl_str_idx = StrContains(filename, ".mdl");
+	if(mdl_str_idx != -1) {
+		filename[mdl_str_idx] = '\0';
+	}
+
+	//TODO!!!! get the path from the model itself
+
+	FormatEx(__animhelpers_vmt_varvalue, PLATFORM_MAX_PATH, "%s.vdd", filename);
+	if(FileExists(__animhelpers_vmt_varvalue, true)) {
+		AddFileToDownloadsTable(__animhelpers_vmt_varvalue);
+	}
+
+	FormatEx(__animhelpers_vmt_varvalue, PLATFORM_MAX_PATH, "%s.phy", filename);
+	if(FileExists(__animhelpers_vmt_varvalue, true)) {
+		AddFileToDownloadsTable(__animhelpers_vmt_varvalue);
+	}
+
+	FormatEx(__animhelpers_vmt_varvalue, PLATFORM_MAX_PATH, "%s.vtx", filename);
+	if(FileExists(__animhelpers_vmt_varvalue, true)) {
+		AddFileToDownloadsTable(__animhelpers_vmt_varvalue);
+	}
+
+	FormatEx(__animhelpers_vmt_varvalue, PLATFORM_MAX_PATH, "%s.dx90.vtx", filename);
+	if(FileExists(__animhelpers_vmt_varvalue, true)) {
+		AddFileToDownloadsTable(__animhelpers_vmt_varvalue);
+	}
+
+	FormatEx(__animhelpers_vmt_varvalue, PLATFORM_MAX_PATH, "%s.dx80.vtx", filename);
+	if(FileExists(__animhelpers_vmt_varvalue, true)) {
+		AddFileToDownloadsTable(__animhelpers_vmt_varvalue);
+	}
+
+	FormatEx(__animhelpers_vmt_varvalue, PLATFORM_MAX_PATH, "%s.sw.vtx", filename);
+	if(FileExists(__animhelpers_vmt_varvalue, true)) {
+		AddFileToDownloadsTable(__animhelpers_vmt_varvalue);
+	}
+
+	StudioModel mdl = view_as<StudioModel>(ModelInfo.GetModel(idx));
+	if(mdl == StudioModel_Null) {
+		return;
+	}
+
+	mdl.GetAnimBlockPath(__animhelpers_vmt_varvalue, PLATFORM_MAX_PATH);
+	if(__animhelpers_vmt_varvalue[0] != '\0') {
+		AddFileToDownloadsTable(__animhelpers_vmt_varvalue);
+	}
+
+	int num_incmdls = mdl.IncludedModels;
+	for(int i = 0; i < num_incmdls; ++i) {
+		mdl.GetIncludedModelPath(i, __animhelpers_vmt_varvalue, PLATFORM_MAX_PATH);
+		if(__animhelpers_vmt_varvalue[0] != '\0') {
+			__animhelpers_incmdl_dl(__animhelpers_vmt_varvalue);
+		}
+	}
+
+	if(__animhelpers_vmt_cond_regex == null) {
+		char err[128];
+		RegexError errcode = REGEX_ERROR_NONE;
+		__animhelpers_vmt_cond_regex = new Regex(
+			"(?:[a-z]_)?(?:(?:(?:[<>][=]?)|hdr_)?dx(?:(?:9[05](?:_20b)?)|6)|hdr|ldr|srgb)"
+			, 0, err, sizeof(err), errcode
+		);
+		if(errcode != REGEX_ERROR_NONE) {
+			SetFailState("[ANIMHELPERS] failed to create vmt conditional regex: %s (%i)", err, errcode);
+		}
+	}
+
+	int num_lods = mdl.LODCount;
+	for(int j = 0; j < num_lods; ++j) {
+		StudioModelLOD lod = mdl.GetLOD(j);
+
+		int num_mat = lod.MaterialCount;
+		for(int i = 0; i < num_mat; ++i) {
+			lod.GetMaterialName(i, __animhelpers_vmt_varvalue, PLATFORM_MAX_PATH);
+			FormatEx(__animhelpers_vmt_varvalue, PLATFORM_MAX_PATH, "materials/%s.vmt", __animhelpers_vmt_varvalue);
+			AddFileToDownloadsTable(__animhelpers_vmt_varvalue);
+
+			KeyValues mat = new KeyValues("");
+			if(mat.ImportFromFile(__animhelpers_vmt_varvalue)) {
+				__animhelpers_parse_material_dl(mat);
+			}
+			delete mat;
+		}
+	}
+}
 
 #if !defined REQUIRE_EXTENSIONS
 public void __ext_animhelpers_SetNTVOptional()
