@@ -4,6 +4,9 @@
 static char vmt_varname[64];
 static char vmt_varvalue[PLATFORM_MAX_PATH];
 
+static ArrayList processed_materials;
+static ArrayList processed_incmdls;
+
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int length)
 {
 	RegPluginLibrary("animhelpers");
@@ -15,6 +18,9 @@ static Regex vmt_cond_regex;
 
 public void OnPluginStart()
 {
+	processed_incmdls = new ArrayList(ByteCountToCells(PLATFORM_MAX_PATH));
+	processed_materials = new ArrayList(ByteCountToCells(PLATFORM_MAX_PATH));
+
 	char err[128];
 	RegexError errcode = REGEX_ERROR_NONE;
 	vmt_cond_regex = new Regex(
@@ -97,17 +103,66 @@ static void parse_material_dl(KeyValues mat)
 				AddFileToDownloadsTable(vmt_varvalue);
 			} else if(StrEqual(vmt_varname, "insert") ||
 						vmt_cond_regex.Match(vmt_varname) > 0) {
-				parse_material_dl(mat);
-			} else if(StrEqual(vmt_varname, "include")) {
-				KeyValues inc = new KeyValues("");
-				if(inc.ImportFromFile(vmt_varvalue)) {
-					parse_material_dl(inc);
+				if(find_lowerstring(processed_materials, vmt_varvalue) == -1) {
+					push_lowerstr(processed_materials, vmt_varvalue);
+
+					parse_material_dl(mat);
 				}
-				delete inc;
+			} else if(StrEqual(vmt_varname, "include")) {
+				if(find_lowerstring(processed_materials, vmt_varvalue) == -1) {
+					push_lowerstr(processed_materials, vmt_varvalue);
+
+					KeyValues inc = new KeyValues("");
+					if(inc.ImportFromFile(vmt_varvalue)) {
+						parse_material_dl(inc);
+					}
+					delete inc;
+				}
 			}
 		} while(mat.GotoNextKey(false));
 		mat.GoBack();
 	}
+}
+
+static int find_lowerstring(ArrayList arr, const char[] input)
+{
+	char temp[PLATFORM_MAX_PATH];
+
+	int input_len = strlen(input);
+
+	int len = arr.Length;
+	for(int i = 0; i < len; ++i) {
+		arr.GetString(i, temp, PLATFORM_MAX_PATH);
+
+		bool equal = true;
+
+		for(int k = 0; k <= input_len && k < PLATFORM_MAX_PATH; ++k) {
+			char c1 = CharToLower(input[k]);
+			char c2 = temp[k];
+
+			if(c1 != c2) {
+				equal = false;
+				break;
+			}
+		}
+
+		if(!equal) {
+			continue;
+		}
+
+		return i;
+	}
+
+	return -1;
+}
+
+static void push_lowerstr(ArrayList arr, const char[] input)
+{
+	char temp[PLATFORM_MAX_PATH];
+	strcopy(temp, PLATFORM_MAX_PATH, input);
+	lowerstr(temp);
+
+	arr.PushString(temp);
 }
 
 static void add_incmdl_to_dltable(const char[] filename)
@@ -132,8 +187,19 @@ static void add_incmdl_to_dltable(const char[] filename)
 	int num_incmdls = mdl.IncludedModels;
 	for(int i = 0; i < num_incmdls; ++i) {
 		mdl.GetIncludedModelPath(i, vmt_varvalue, PLATFORM_MAX_PATH);
-		add_incmdl_to_dltable(vmt_varvalue);
+		if(find_lowerstring(processed_incmdls, vmt_varvalue) == -1) {
+			push_lowerstr(processed_incmdls, vmt_varvalue);
+			add_incmdl_to_dltable(vmt_varvalue);
+		}
 	}
+}
+
+//TODO!!!!!!! resolve full path in everthing
+
+public void OnMapEnd()
+{
+	processed_materials.Clear();
+	processed_incmdls.Clear();
 }
 
 static int native_AddModelToDownloadsTable(Handle plugin, int params)
@@ -197,11 +263,15 @@ static int native_AddModelToDownloadsTable(Handle plugin, int params)
 		AddFileToDownloadsTable(vmt_varvalue);
 	}
 
+	push_lowerstr(processed_incmdls, filename);
 	int num_incmdls = mdl.IncludedModels;
 	for(int i = 0; i < num_incmdls; ++i) {
 		mdl.GetIncludedModelPath(i, vmt_varvalue, PLATFORM_MAX_PATH);
+		push_lowerstr(processed_incmdls, vmt_varvalue);
 		add_incmdl_to_dltable(vmt_varvalue);
 	}
+
+	int num_texs = mdl.NumTextures;
 
 	int num_lods = mdl.LODCount;
 	for(int j = 0; j < num_lods; ++j) {
@@ -211,8 +281,20 @@ static int native_AddModelToDownloadsTable(Handle plugin, int params)
 		for(int i = 0; i < num_mat; ++i) {
 			lod.GetMaterialName(i, vmt_varvalue, PLATFORM_MAX_PATH);
 			if(StrEqual(vmt_varvalue, "___error")) {
+				if(i < num_texs) {
+					mdl.GetTextureName(i, vmt_varvalue, PLATFORM_MAX_PATH);
+					LogMessage("model '%s' LOD#%i material#%i (possibly: '%s') is missing", filename, j, i, vmt_varvalue);
+				} else {
+					LogMessage("model '%s' LOD#%i material#%i is missing", filename, j, i);
+				}
 				continue;
 			}
+
+			if(find_lowerstring(processed_materials, vmt_varvalue) != -1) {
+				continue;
+			}
+
+			push_lowerstr(processed_materials, vmt_varvalue);
 
 			Format(vmt_varvalue, PLATFORM_MAX_PATH, "materials/%s.vmt", vmt_varvalue);
 			AddFileToDownloadsTable(vmt_varvalue);

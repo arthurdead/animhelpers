@@ -225,6 +225,20 @@ methodmap StudioModel < BaseModel
 	public native int GetIncludedModelPath(int idx, char[] name, int len);
 
 	public native int GetAnimBlockPath(char[] name, int len);
+
+	property int NumTextureCDS
+	{
+		public native get();
+	}
+
+	public native int GetTextureDirectory(int idx, char[] name, int len);
+
+	property int NumTextures
+	{
+		public native get();
+	}
+
+	public native int GetTextureName(int idx, char[] name, int len);
 };
 
 #define StudioModel_Null (view_as<StudioModel>(Address_Null))

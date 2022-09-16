@@ -3703,6 +3703,24 @@ static cell_t StudioModelIncludedModelsget(IPluginContext *pContext, const cell_
 	return pStudio->numincludemodels;
 }
 
+static cell_t StudioModelNumTexturesget(IPluginContext *pContext, const cell_t *params)
+{
+	model_t *mod = (model_t *)params[1];
+
+	studiohdr_t *pStudio = modelinfo->GetStudiomodel(mod);
+
+	return pStudio->numtextures;
+}
+
+static cell_t StudioModelNumTextureCDSget(IPluginContext *pContext, const cell_t *params)
+{
+	model_t *mod = (model_t *)params[1];
+
+	studiohdr_t *pStudio = modelinfo->GetStudiomodel(mod);
+
+	return pStudio->numcdtextures;
+}
+
 static cell_t StudioModelGetIncludedModel(IPluginContext *pContext, const cell_t *params)
 {
 	model_t *mod = (model_t *)params[1];
@@ -3711,6 +3729,33 @@ static cell_t StudioModelGetIncludedModel(IPluginContext *pContext, const cell_t
 	mstudiomodelgroup_t *modelgroup = pStudio->pModelGroup(params[2]);
 
 	const char *ptr = modelgroup->pszName();
+
+	size_t written = 0;
+	pContext->StringToLocalUTF8(params[3], params[4], ptr, &written);
+	return written;
+}
+
+static cell_t StudioModelGetTextureName(IPluginContext *pContext, const cell_t *params)
+{
+	model_t *mod = (model_t *)params[1];
+
+	studiohdr_t *pStudio = modelinfo->GetStudiomodel(mod);
+	mstudiotexture_t *pTex = pStudio->pTexture(params[2]);
+
+	const char *ptr = pTex->pszName();
+
+	size_t written = 0;
+	pContext->StringToLocalUTF8(params[3], params[4], ptr, &written);
+	return written;
+}
+
+static cell_t StudioModelGetTextureDirectory(IPluginContext *pContext, const cell_t *params)
+{
+	model_t *mod = (model_t *)params[1];
+
+	studiohdr_t *pStudio = modelinfo->GetStudiomodel(mod);
+
+	const char *ptr = pStudio->pCdtexture(params[2]);
 
 	size_t written = 0;
 	pContext->StringToLocalUTF8(params[3], params[4], ptr, &written);
@@ -3903,6 +3948,10 @@ static const sp_nativeinfo_t g_sNativesInfo[] =
 	{"StudioModel.GetIncludedModelPath", StudioModelGetIncludedModel},
 	{"StudioModel.GetAnimBlockPath", StudioModelGetAnimBlockName},
 	{"StudioModel.GetLOD", StudioModelGetLOD},
+	{"StudioModel.NumTextureCDS.get", StudioModelNumTextureCDSget},
+	{"StudioModel.GetTextureDirectory", StudioModelGetTextureDirectory},
+	{"StudioModel.NumTextures.get", StudioModelNumTexturesget},
+	{"StudioModel.GetTextureName", StudioModelGetTextureName},
 	{"StudioModelLOD.MaterialCount.get", StudioModelLODMaterialCountget},
 	{"StudioModelLOD.GetMaterialName", StudioModelLODGetMaterialName},
 	{"ModelInfo.GetModelIndex", ModelInfoGetModelIndex},
