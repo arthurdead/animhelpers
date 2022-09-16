@@ -74,11 +74,14 @@ static void parse_material_dl(KeyValues mat)
 						}
 					}
 
-					Format(vmt_varvalue, PLATFORM_MAX_PATH, "materials/%s.vtf", vmt_varvalue);
+					char tmpvalue[PLATFORM_MAX_PATH];
+					strcopy(tmpvalue, PLATFORM_MAX_PATH, vmt_varvalue);
+
+					FormatEx(vmt_varvalue, PLATFORM_MAX_PATH, "materials/%s.vtf", tmpvalue);
 					if(FileExists(vmt_varvalue, true)) {
 						AddFileToDownloadsTable(vmt_varvalue);
 					}
-					Format(vmt_varvalue, PLATFORM_MAX_PATH, "materials/%s.hdr.vtf", vmt_varvalue);
+					FormatEx(vmt_varvalue, PLATFORM_MAX_PATH, "materials/%s.hdr.vtf", tmpvalue);
 					if(FileExists(vmt_varvalue, true)) {
 						AddFileToDownloadsTable(vmt_varvalue);
 					}
@@ -207,7 +210,11 @@ static int native_AddModelToDownloadsTable(Handle plugin, int params)
 		int num_mat = lod.MaterialCount;
 		for(int i = 0; i < num_mat; ++i) {
 			lod.GetMaterialName(i, vmt_varvalue, PLATFORM_MAX_PATH);
-			FormatEx(vmt_varvalue, PLATFORM_MAX_PATH, "materials/%s.vmt", vmt_varvalue);
+			if(StrEqual(vmt_varvalue, "___error")) {
+				continue;
+			}
+
+			Format(vmt_varvalue, PLATFORM_MAX_PATH, "materials/%s.vmt", vmt_varvalue);
 			AddFileToDownloadsTable(vmt_varvalue);
 
 			KeyValues mat = new KeyValues("");
