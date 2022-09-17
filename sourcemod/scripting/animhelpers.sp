@@ -121,14 +121,14 @@ static void parse_material_dl(KeyValues mat)
 				AddFileToDownloadsTable_fixed(vmt_varvalue);
 			} else if(StrEqual(vmt_varname, "insert") ||
 						vmt_cond_regex.Match(vmt_varname) > 0) {
-				if(find_lowerstring(processed_materials, vmt_varvalue) == -1) {
-					push_lowerstr(processed_materials, vmt_varvalue);
+				if(find_pathstring(processed_materials, vmt_varvalue) == -1) {
+					push_pathstr(processed_materials, vmt_varvalue);
 
 					parse_material_dl(mat);
 				}
 			} else if(StrEqual(vmt_varname, "include")) {
-				if(find_lowerstring(processed_materials, vmt_varvalue) == -1) {
-					push_lowerstr(processed_materials, vmt_varvalue);
+				if(find_pathstring(processed_materials, vmt_varvalue) == -1) {
+					push_pathstr(processed_materials, vmt_varvalue);
 
 					KeyValues inc = new KeyValues("");
 					if(inc.ImportFromFile(vmt_varvalue)) {
@@ -140,47 +140,6 @@ static void parse_material_dl(KeyValues mat)
 		} while(mat.GotoNextKey(false));
 		mat.GoBack();
 	}
-}
-
-static int find_lowerstring(ArrayList arr, const char[] input)
-{
-	char temp[PLATFORM_MAX_PATH];
-
-	int input_len = strlen(input);
-
-	int len = arr.Length;
-	for(int i = 0; i < len; ++i) {
-		arr.GetString(i, temp, PLATFORM_MAX_PATH);
-
-		bool equal = true;
-
-		for(int k = 0; k <= input_len && k < PLATFORM_MAX_PATH; ++k) {
-			char c1 = CharToLower(input[k]);
-			char c2 = temp[k];
-
-			if(c1 != c2) {
-				equal = false;
-				break;
-			}
-		}
-
-		if(!equal) {
-			continue;
-		}
-
-		return i;
-	}
-
-	return -1;
-}
-
-static void push_lowerstr(ArrayList arr, const char[] input)
-{
-	char temp[PLATFORM_MAX_PATH];
-	strcopy(temp, PLATFORM_MAX_PATH, input);
-	lowerstr(temp);
-
-	arr.PushString(temp);
 }
 
 static void add_incmdl_to_dltable(const char[] filename)
@@ -205,8 +164,8 @@ static void add_incmdl_to_dltable(const char[] filename)
 	int num_incmdls = mdl.IncludedModels;
 	for(int i = 0; i < num_incmdls; ++i) {
 		mdl.GetIncludedModelPath(i, vmt_varvalue, PLATFORM_MAX_PATH);
-		if(find_lowerstring(processed_incmdls, vmt_varvalue) == -1) {
-			push_lowerstr(processed_incmdls, vmt_varvalue);
+		if(find_pathstring(processed_incmdls, vmt_varvalue) == -1) {
+			push_pathstr(processed_incmdls, vmt_varvalue);
 			add_incmdl_to_dltable(vmt_varvalue);
 		}
 	}
@@ -279,11 +238,11 @@ static int native_AddModelToDownloadsTable(Handle plugin, int params)
 		AddFileToDownloadsTable_fixed(vmt_varvalue);
 	}
 
-	push_lowerstr(processed_incmdls, filename);
+	push_pathstr(processed_incmdls, filename);
 	int num_incmdls = mdl.IncludedModels;
 	for(int i = 0; i < num_incmdls; ++i) {
 		mdl.GetIncludedModelPath(i, vmt_varvalue, PLATFORM_MAX_PATH);
-		push_lowerstr(processed_incmdls, vmt_varvalue);
+		push_pathstr(processed_incmdls, vmt_varvalue);
 		add_incmdl_to_dltable(vmt_varvalue);
 	}
 
@@ -306,11 +265,11 @@ static int native_AddModelToDownloadsTable(Handle plugin, int params)
 				continue;
 			}
 
-			if(find_lowerstring(processed_materials, vmt_varvalue) != -1) {
+			if(find_pathstring(processed_materials, vmt_varvalue) != -1) {
 				continue;
 			}
 
-			push_lowerstr(processed_materials, vmt_varvalue);
+			push_pathstr(processed_materials, vmt_varvalue);
 
 			Format(vmt_varvalue, PLATFORM_MAX_PATH, "materials/%s.vmt", vmt_varvalue);
 			AddFileToDownloadsTable_fixed(vmt_varvalue);
@@ -326,6 +285,64 @@ static int native_AddModelToDownloadsTable(Handle plugin, int params)
 	return 0;
 }
 
+static void normalize_pathsep(char[] str)
+{
+	int i = 0;
+	while(str[i] != '\0') {
+		if(str[i] == '\\') {
+			str[i] = '/';
+		}
+		++i;
+	}
+}
+
+static int find_pathstring(ArrayList arr, const char[] input)
+{
+	char temp[PLATFORM_MAX_PATH];
+
+	int input_len = strlen(input);
+
+	int len = arr.Length;
+	for(int i = 0; i < len; ++i) {
+		arr.GetString(i, temp, PLATFORM_MAX_PATH);
+
+		bool equal = true;
+
+		for(int k = 0; k <= input_len && k < PLATFORM_MAX_PATH; ++k) {
+			char c1 = CharToLower(input[k]);
+			if(c1 == '\\') {
+				c1 = '/'
+			}
+
+			char c2 = temp[k];
+
+			if(c1 != c2) {
+				equal = false;
+				break;
+			}
+		}
+
+		if(!equal) {
+			continue;
+		}
+
+		return i;
+	}
+
+	return -1;
+}
+
+static void push_pathstr(ArrayList arr, const char[] input)
+{
+	char temp[PLATFORM_MAX_PATH];
+	strcopy(temp, PLATFORM_MAX_PATH, input);
+
+	lowerstr(temp);
+	normalize_pathsep(temp);
+
+	arr.PushString(temp);
+}
+
 static void AddFileToDownloadsTable_fixed(const char[] filename)
 {
 	//TODO!!!!!!! resolve full path
@@ -333,13 +350,7 @@ static void AddFileToDownloadsTable_fixed(const char[] filename)
 	char temp[PLATFORM_MAX_PATH];
 	strcopy(temp, PLATFORM_MAX_PATH, filename);
 
-	int i = 0;
-	while(temp[i] != '\0') {
-		if(temp[i] == '\\') {
-			temp[i] = '/';
-		}
-		++i;
-	}
+	normalize_pathsep(temp);
 
 	AddFileToDownloadsTable(temp);
 }
