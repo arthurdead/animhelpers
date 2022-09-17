@@ -30,6 +30,24 @@ public void OnPluginStart()
 	if(errcode != REGEX_ERROR_NONE) {
 		SetFailState("failed to create vmt conditional regex: %s (%i)", err, errcode);
 	}
+
+	RegAdminCmd("sm_printdltable", sm_printdltable, ADMFLAG_ROOT);
+}
+
+static Action sm_printdltable(int client, int args)
+{
+	int table = FindStringTable("downloadables");
+
+	int len = GetStringTableNumStrings(table);
+
+	char tmpstr[PLATFORM_MAX_PATH];
+
+	for(int i = 0; i < len; ++i) {
+		ReadStringTable(table, i, tmpstr, PLATFORM_MAX_PATH);
+		PrintToConsole(client, "%s", tmpstr);
+	}
+
+	return Plugin_Handled;
 }
 
 static void lowerstr(char[] name)
@@ -67,7 +85,7 @@ static void parse_material_dl(KeyValues mat)
 				}
 
 				Format(vmt_varvalue, PLATFORM_MAX_PATH, "materials/%s.vtf", vmt_varvalue);
-				AddFileToDownloadsTable(vmt_varvalue);
+				AddFileToDownloadsTable_fixed(vmt_varvalue);
 			} else if(StrEqual(vmt_varname, "$envmap")) {
 				if(!StrEqual(vmt_varvalue, "env_cubemap")) {
 					int ext = StrContains(vmt_varvalue, ".hdr.vtf");
@@ -85,11 +103,11 @@ static void parse_material_dl(KeyValues mat)
 
 					FormatEx(vmt_varvalue, PLATFORM_MAX_PATH, "materials/%s.vtf", tmpvalue);
 					if(FileExists(vmt_varvalue, true)) {
-						AddFileToDownloadsTable(vmt_varvalue);
+						AddFileToDownloadsTable_fixed(vmt_varvalue);
 					}
 					FormatEx(vmt_varvalue, PLATFORM_MAX_PATH, "materials/%s.hdr.vtf", tmpvalue);
 					if(FileExists(vmt_varvalue, true)) {
-						AddFileToDownloadsTable(vmt_varvalue);
+						AddFileToDownloadsTable_fixed(vmt_varvalue);
 					}
 				}
 			} else if(StrEqual(vmt_varname, "$material") ||
@@ -100,7 +118,7 @@ static void parse_material_dl(KeyValues mat)
 				}
 
 				Format(vmt_varvalue, PLATFORM_MAX_PATH, "materials/%s.vmt", vmt_varvalue);
-				AddFileToDownloadsTable(vmt_varvalue);
+				AddFileToDownloadsTable_fixed(vmt_varvalue);
 			} else if(StrEqual(vmt_varname, "insert") ||
 						vmt_cond_regex.Match(vmt_varname) > 0) {
 				if(find_lowerstring(processed_materials, vmt_varvalue) == -1) {
@@ -167,7 +185,7 @@ static void push_lowerstr(ArrayList arr, const char[] input)
 
 static void add_incmdl_to_dltable(const char[] filename)
 {
-	AddFileToDownloadsTable(filename);
+	AddFileToDownloadsTable_fixed(filename);
 
 	int idx = ModelInfo.GetModelIndex(filename);
 	if(idx == -1) {
@@ -181,7 +199,7 @@ static void add_incmdl_to_dltable(const char[] filename)
 
 	mdl.GetAnimBlockPath(vmt_varvalue, PLATFORM_MAX_PATH);
 	if(vmt_varvalue[0] != '\0') {
-		AddFileToDownloadsTable(vmt_varvalue);
+		AddFileToDownloadsTable_fixed(vmt_varvalue);
 	}
 
 	int num_incmdls = mdl.IncludedModels;
@@ -193,8 +211,6 @@ static void add_incmdl_to_dltable(const char[] filename)
 		}
 	}
 }
-
-//TODO!!!!!!! resolve full path in everthing
 
 public void OnMapEnd()
 {
@@ -209,7 +225,7 @@ static int native_AddModelToDownloadsTable(Handle plugin, int params)
 	char[] filename = new char[++len];
 	GetNativeString(1, filename, len);
 
-	AddFileToDownloadsTable(filename);
+	AddFileToDownloadsTable_fixed(filename);
 
 	int idx = ModelInfo.GetModelIndex(filename);
 	if(idx == -1) {
@@ -225,32 +241,32 @@ static int native_AddModelToDownloadsTable(Handle plugin, int params)
 
 	FormatEx(vmt_varvalue, PLATFORM_MAX_PATH, "%s.vdd", filename);
 	if(FileExists(vmt_varvalue, true)) {
-		AddFileToDownloadsTable(vmt_varvalue);
+		AddFileToDownloadsTable_fixed(vmt_varvalue);
 	}
 
 	FormatEx(vmt_varvalue, PLATFORM_MAX_PATH, "%s.phy", filename);
 	if(FileExists(vmt_varvalue, true)) {
-		AddFileToDownloadsTable(vmt_varvalue);
+		AddFileToDownloadsTable_fixed(vmt_varvalue);
 	}
 
 	FormatEx(vmt_varvalue, PLATFORM_MAX_PATH, "%s.vtx", filename);
 	if(FileExists(vmt_varvalue, true)) {
-		AddFileToDownloadsTable(vmt_varvalue);
+		AddFileToDownloadsTable_fixed(vmt_varvalue);
 	}
 
 	FormatEx(vmt_varvalue, PLATFORM_MAX_PATH, "%s.dx90.vtx", filename);
 	if(FileExists(vmt_varvalue, true)) {
-		AddFileToDownloadsTable(vmt_varvalue);
+		AddFileToDownloadsTable_fixed(vmt_varvalue);
 	}
 
 	FormatEx(vmt_varvalue, PLATFORM_MAX_PATH, "%s.dx80.vtx", filename);
 	if(FileExists(vmt_varvalue, true)) {
-		AddFileToDownloadsTable(vmt_varvalue);
+		AddFileToDownloadsTable_fixed(vmt_varvalue);
 	}
 
 	FormatEx(vmt_varvalue, PLATFORM_MAX_PATH, "%s.sw.vtx", filename);
 	if(FileExists(vmt_varvalue, true)) {
-		AddFileToDownloadsTable(vmt_varvalue);
+		AddFileToDownloadsTable_fixed(vmt_varvalue);
 	}
 
 	StudioModel mdl = view_as<StudioModel>(ModelInfo.GetModel(idx));
@@ -260,7 +276,7 @@ static int native_AddModelToDownloadsTable(Handle plugin, int params)
 
 	mdl.GetAnimBlockPath(vmt_varvalue, PLATFORM_MAX_PATH);
 	if(vmt_varvalue[0] != '\0') {
-		AddFileToDownloadsTable(vmt_varvalue);
+		AddFileToDownloadsTable_fixed(vmt_varvalue);
 	}
 
 	push_lowerstr(processed_incmdls, filename);
@@ -297,7 +313,7 @@ static int native_AddModelToDownloadsTable(Handle plugin, int params)
 			push_lowerstr(processed_materials, vmt_varvalue);
 
 			Format(vmt_varvalue, PLATFORM_MAX_PATH, "materials/%s.vmt", vmt_varvalue);
-			AddFileToDownloadsTable(vmt_varvalue);
+			AddFileToDownloadsTable_fixed(vmt_varvalue);
 
 			KeyValues mat = new KeyValues("");
 			if(mat.ImportFromFile(vmt_varvalue)) {
@@ -308,4 +324,22 @@ static int native_AddModelToDownloadsTable(Handle plugin, int params)
 	}
 
 	return 0;
+}
+
+static void AddFileToDownloadsTable_fixed(const char[] filename)
+{
+	//TODO!!!!!!! resolve full path
+
+	char temp[PLATFORM_MAX_PATH];
+	strcopy(temp, PLATFORM_MAX_PATH, filename);
+
+	int i = 0;
+	while(temp[i] != '\0') {
+		if(temp[i] == '\\') {
+			temp[i] = '/';
+		}
+		++i;
+	}
+
+	AddFileToDownloadsTable(temp);
 }
