@@ -6,6 +6,10 @@
 #include <sdktools>
 #include <regex>
 
+#if !defined GAME_TF2 && !defined GAME_L4D2
+	#error please define either GAME_TF2 or GAME_L4D2
+#endif
+
 enum struct animevent_t
 {
 	int event;
@@ -69,7 +73,7 @@ native int AnimatingGetSequenceActivityName(int entity, int id, char[] name, int
 native Activity AnimatingGetSequenceActivity(int entity, int seq);
 native int AnimatingLookupSequence(int entity, const char[] name);
 
-stock void AnimatingResetSequence(int entity, int sequence, bool force = false)
+stock void AnimatingResetSequence(int entity, int sequence)
 {
 	if(!GetEntProp(entity, Prop_Data, "m_bSequenceLoops")) {
 		SetEntPropFloat(entity, Prop_Send, "m_flCycle", 0.0);
@@ -271,6 +275,7 @@ public void __ext_animhelpers_SetNTVOptional()
 	MarkNativeAsOptional("AnimatingLookupPoseParameter");
 	MarkNativeAsOptional("AnimatingSetPoseParameter");
 	MarkNativeAsOptional("AnimatingGetPoseParameter");
+	MarkNativeAsOptional("AnimatingSequenceDuration");
 
 	MarkNativeAsOptional("AnimatingOverlayAddGestureSequence");
 	MarkNativeAsOptional("AnimatingOverlayAddGestureSequenceEx");

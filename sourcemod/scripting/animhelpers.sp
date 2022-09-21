@@ -53,8 +53,9 @@ static Action sm_printdltable(int client, int args)
 static void lowerstr(char[] name)
 {
 	int i = 0;
-	while(name[i++] != '\0') {
+	while(name[i] != '\0') {
 		name[i] = CharToLower(name[i]);
+		++i;
 	}
 }
 
