@@ -1,6 +1,15 @@
 #include <sourcemod>
 #include <animhelpers>
 
+public Plugin myinfo = 
+{
+	name = "animhelpers",
+	author = "Arthurdead",
+	description = "",
+	version = "0.1.0.0",
+	url = ""
+};
+
 static char vmt_varname[64];
 static char vmt_varvalue[PLATFORM_MAX_PATH];
 
@@ -79,7 +88,8 @@ static void parse_material_dl(KeyValues mat)
 				StrEqual(vmt_varname, "$sheenmap") ||
 				StrEqual(vmt_varname, "$sheenmapmask") ||
 				StrEqual(vmt_varname, "$envmapmask") ||
-				StrEqual(vmt_varname, "$detail")) {
+				StrEqual(vmt_varname, "$detail") ||
+				StrEqual(vmt_varname, "$selfillummask")) {
 				int ext = StrContains(vmt_varvalue, ".vtf");
 				if(ext != -1) {
 					vmt_varvalue[ext] = '\0';
