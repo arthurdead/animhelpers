@@ -6,7 +6,7 @@ public Plugin myinfo =
 	name = "animhelpers",
 	author = "Arthurdead",
 	description = "",
-	version = "0.1.0.0",
+	version = "0.1.0.1",
 	url = ""
 };
 
@@ -209,7 +209,7 @@ static int native_AddModelToDownloadsTable(Handle plugin, int params)
 
 	//TODO!!!! get the path from the model itself
 
-	FormatEx(vmt_varvalue, PLATFORM_MAX_PATH, "%s.vdd", filename);
+	FormatEx(vmt_varvalue, PLATFORM_MAX_PATH, "%s.vvd", filename);
 	if(FileExists(vmt_varvalue, true)) {
 		AddFileToDownloadsTable_fixed(vmt_varvalue);
 	}
