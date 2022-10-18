@@ -25,7 +25,9 @@ enum struct animevent_t
 #include <animhelpers_activity>
 #include <animhelpers_eventlist>
 
+native void EntityEyePosition(int entity, float eyes[3]);
 native void EntityWorldSpaceCenter(int entity, float center[3]);
+native void EntityGetAbsOrigin(int entity, float pos[3]);
 native void EntitySetAbsOrigin(int entity, const float pos[3]);
 
 typedef handleanimevent_func_t = function Action (int entity, animevent_t event);

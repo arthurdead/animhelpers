@@ -103,6 +103,7 @@ int m_iEFlagsOffset = -1;
 int m_flPlaybackRateOffset = -1;
 int m_flCycleOffset = -1;
 int m_vecOriginOffset = -1;
+int m_vecAbsOriginOffset = -1;
 int m_angRotationOffset = -1;
 int m_bSequenceLoopsOffset = -1;
 int m_flAnimTimeOffset = -1;
@@ -113,6 +114,7 @@ int CBaseAnimatingDispatchAnimEvents = -1;
 int CBaseAnimatingGetAttachment = -1;
 int CBaseAnimatingGetBoneTransform = -1;
 int CBaseEntityWorldSpaceCenter = -1;
+int CBaseEntityEyePosition = -1;
 
 int CBaseAnimatingHandleAnimEvent = -1;
 
@@ -288,7 +290,23 @@ public:
 		
 		return *(Vector *)(((unsigned char *)this) + m_vecOriginOffset);
 	}
-	
+
+	const Vector &GetAbsOrigin()
+	{
+		if(m_vecAbsOriginOffset == -1) {
+			datamap_t *map = gamehelpers->GetDataMap(this);
+			sm_datatable_info_t info{};
+			gamehelpers->FindDataMapInfo(map, "m_vecAbsOrigin", &info);
+			m_vecAbsOriginOffset = info.actual_offset;
+		}
+		
+		if(GetIEFlags() & EFL_DIRTY_ABSTRANSFORM) {
+			CalcAbsolutePosition();
+		}
+		
+		return *(Vector *)(((unsigned char *)this) + m_vecAbsOriginOffset);
+	}
+
 	const QAngle &GetLocalAngles()
 	{
 		if(m_angRotationOffset == -1) {
@@ -309,6 +327,11 @@ public:
 	const Vector &WorldSpaceCenter()
 	{
 		return call_vfunc<const Vector &>(this, CBaseEntityWorldSpaceCenter);
+	}
+
+	Vector EyePosition()
+	{
+		return call_vfunc<Vector>(this, CBaseEntityEyePosition);
 	}
 };
 
@@ -2453,6 +2476,42 @@ static cell_t BaseEntityWorldSpaceCenter(IPluginContext *pContext, const cell_t 
 	return 0;
 }
 
+static cell_t BaseEntityEyePosition(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseEntity *pEntity = gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+	
+	cell_t *addr = nullptr;
+	pContext->LocalToPhysAddr(params[2], &addr);
+
+	Vector pos = pEntity->EyePosition();
+	addr[0] = sp_ftoc(pos.x);
+	addr[1] = sp_ftoc(pos.y);
+	addr[2] = sp_ftoc(pos.z);
+
+	return 0;
+}
+
+static cell_t BaseEntityGetAbsOrigin(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseEntity *pEntity = gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+	
+	cell_t *addr = nullptr;
+	pContext->LocalToPhysAddr(params[2], &addr);
+
+	const Vector &pos = pEntity->GetAbsOrigin();
+	addr[0] = sp_ftoc(pos.x);
+	addr[1] = sp_ftoc(pos.y);
+	addr[2] = sp_ftoc(pos.z);
+
+	return 0;
+}
+
 static cell_t BaseAnimatingLookupAttachment(IPluginContext *pContext, const cell_t *params)
 {
 	CBaseAnimating *pEntity = (CBaseAnimating *)gamehelpers->ReferenceToEntity(params[1]);
@@ -3846,6 +3905,8 @@ static const sp_nativeinfo_t g_sNativesInfo[] =
 {
 	{"EntitySetAbsOrigin", BaseEntitySetAbsOrigin},
 	{"EntityWorldSpaceCenter", BaseEntityWorldSpaceCenter},
+	{"EntityEyePosition", BaseEntityEyePosition},
+	{"EntityGetAbsOrigin", BaseEntityGetAbsOrigin},
 	{"AnimatingSelectWeightedSequence", BaseAnimatingSelectWeightedSequenceEx},
 	{"AnimatingSelectHeaviestSequence", BaseAnimatingSelectHeaviestSequenceEx},
 	{"AnimatingLookupSequence", BaseAnimatingLookupSequence},
@@ -4013,6 +4074,7 @@ bool Sample::SDK_OnLoad(char *error, size_t maxlen, bool late)
 	SH_MANUALHOOK_RECONFIGURE(HandleAnimEvent, CBaseAnimatingHandleAnimEvent, 0, 0);
 	
 	g_pGameConf->GetOffset("CBaseEntity::WorldSpaceCenter", &CBaseEntityWorldSpaceCenter);
+	g_pGameConf->GetOffset("CBaseEntity::EyePosition", &CBaseEntityEyePosition);
 	
 	g_pGameConf->GetOffset("CBaseAnimating::m_pStudioHdr", &m_pStudioHdrOffset);
 	

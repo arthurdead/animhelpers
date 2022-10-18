@@ -124,6 +124,10 @@
 			{
 				"linux" "153"
 			}
+			"CBaseEntity::EyePosition"
+			{
+				"linux" "134"
+			}
 			"CBaseAnimating::GetBoneTransform"
 			{
 				"linux" "207"
