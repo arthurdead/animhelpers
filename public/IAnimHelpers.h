@@ -10,6 +10,8 @@
 
 class CBaseAnimating;
 
+#include <ai_activity.h>
+
 class IAnimHelpers : public SourceMod::SMInterface
 {
 public:
@@ -25,6 +27,7 @@ public:
 
 	virtual const char *ActivityName(int activity) = 0;
 	virtual const char *SequenceName(CBaseAnimating *pEntity, int sequence) = 0;
+	virtual Activity SequenceActivity(CBaseAnimating *pEntity, int sequence) = 0;
 };
 
 #endif

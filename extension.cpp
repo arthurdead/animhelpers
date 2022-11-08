@@ -52,6 +52,7 @@
 #define CBASE_H
 
 #include "extension.h"
+#include <CDetour/detours.h>
 
 class IEngineTrace *enginetrace = nullptr;
 class IStaticPropMgrServer *staticpropmgr = nullptr;
@@ -68,7 +69,13 @@ class IStaticPropMgrServer *staticpropmgr = nullptr;
 
 #include <unordered_map>
 #include <vector>
+#include <string>
+#include <string_view>
+#include <functional>
 #include <IForwardSys.h>
+
+using namespace std::literals::string_literals;
+using namespace std::literals::string_view_literals;
 
 int *g_nActivityListVersion = nullptr;
 int *g_nEventListVersion = nullptr;
@@ -79,6 +86,11 @@ IVModelInfo *modelinfo = nullptr;
 IMDLCache *mdlcache = nullptr;
 IFileSystem *filesystem = nullptr;
 IMaterialSystem *materials = nullptr;
+ISpatialPartition *partition{nullptr};
+
+#ifdef __HAS_PROXYSEND
+class proxysend *proxysend = nullptr;
+#endif
 
 /**
  * @file extension.cpp
@@ -105,6 +117,11 @@ int m_flCycleOffset = -1;
 int m_vecOriginOffset = -1;
 int m_vecAbsOriginOffset = -1;
 int m_angRotationOffset = -1;
+int m_hMoveParentOffset = -1;
+int touchStampOffset = -1;
+int m_fDataObjectTypesOffset = -1;
+int m_hMoveChildOffset = -1;
+int m_hMovePeerOffset = -1;
 int m_bSequenceLoopsOffset = -1;
 int m_flAnimTimeOffset = -1;
 int m_flPrevAnimTimeOffset = -1;
@@ -167,6 +184,14 @@ R call_vfunc(T *pThisPtr, size_t offset, Args ...args)
 	void *vfunc = vtable[offset];
 	
 	return call_mfunc<R, T, Args...>(pThisPtr, vfunc, args...);
+}
+
+template <typename T>
+T void_to_func(void *ptr)
+{
+	union { T f; void *p; };
+	p = ptr;
+	return f;
 }
 
 extern "C"
@@ -234,13 +259,36 @@ struct AI_CriteriaSet;
 
 #include <shared/shareddefs.h>
 
+#define DECLARE_PREDICTABLE()
+
+#ifndef FMTFUNCTION
+#define FMTFUNCTION(...)
+#endif
+
+#include <collisionproperty.h>
+#include <ehandle.h>
+#include <shared/predictioncopy.h>
+#include <util.h>
+#include <ServerNetworkProperty.h>
+
+CBaseEntityList *g_pEntityList = nullptr;
+
+void *CBaseEntityCollisionRulesChanged{nullptr};
+void *EntityTouch_AddPtr{nullptr};
+
+void EntityTouch_Add( CBaseEntity *pEntity )
+{
+	(void_to_func<void (*)(CBaseEntity *)>(EntityTouch_AddPtr))(pEntity);
+}
+
 class CBaseEntity : public IServerEntity
 {
 public:
-	bool  KeyValue( const char *szKeyName, Vector vec ) { return false; }
-	bool  KeyValue( const char *szKeyName, float flValue ) { return false; }
-	static void *GetPredictionPlayer() { return nullptr; }
-	
+	int entindex()
+	{
+		return gamehelpers->EntityToBCompatRef(this);
+	}
+
 	model_t *GetModel( void )
 	{
 		return (model_t *)modelinfo->GetModel( GetModelIndex() );
@@ -333,7 +381,371 @@ public:
 	{
 		return call_vfunc<Vector>(this, CBaseEntityEyePosition);
 	}
+
+	inline edict_t			*edict( void )			{ return NetworkProp()->edict(); }
+	inline const edict_t	*edict( void ) const	{ return NetworkProp()->edict(); }
+
+	CServerNetworkProperty *NetworkProp() { return (CServerNetworkProperty *)GetNetworkable(); }
+	const CServerNetworkProperty *NetworkProp() const { return (const CServerNetworkProperty *)const_cast<CBaseEntity *>(this)->GetNetworkable(); }
+
+	CCollisionProperty		*CollisionProp() { return (CCollisionProperty		*)GetCollideable(); }
+	const CCollisionProperty*CollisionProp() const { return (const CCollisionProperty*)const_cast<CBaseEntity *>(this)->GetCollideable(); }
+
+	CBaseEntity *GetRootMoveParent()
+	{
+		CBaseEntity *pEntity = this;
+		CBaseEntity *pParent = this->GetMoveParent();
+		while ( pParent )
+		{
+			pEntity = pParent;
+			pParent = pEntity->GetMoveParent();
+		}
+
+		return pEntity;
+	}
+
+	CBaseEntity *FirstMoveChild()
+	{
+		if(m_hMoveChildOffset == -1) {
+			datamap_t *map = gamehelpers->GetDataMap(this);
+			sm_datatable_info_t info{};
+			gamehelpers->FindDataMapInfo(map, "m_hMoveChild", &info);
+			m_hMoveChildOffset = info.actual_offset;
+		}
+
+		return (*(EHANDLE *)(((unsigned char *)this) + m_hMoveChildOffset)).Get();
+	}
+
+	CBaseEntity *NextMovePeer()
+	{
+		if(m_hMovePeerOffset == -1) {
+			datamap_t *map = gamehelpers->GetDataMap(this);
+			sm_datatable_info_t info{};
+			gamehelpers->FindDataMapInfo(map, "m_hMovePeer", &info);
+			m_hMovePeerOffset = info.actual_offset;
+		}
+
+		return (*(EHANDLE *)(((unsigned char *)this) + m_hMovePeerOffset)).Get();
+	}
+
+	CBaseEntity *GetMoveParent()
+	{
+		if(m_hMoveParentOffset == -1) {
+			datamap_t *map = gamehelpers->GetDataMap(this);
+			sm_datatable_info_t info{};
+			gamehelpers->FindDataMapInfo(map, "m_hMoveParent", &info);
+			m_hMoveParentOffset = info.actual_offset;
+		}
+
+		return (*(EHANDLE *)(((unsigned char *)this) + m_hMoveParentOffset)).Get();
+	}
+
+	SolidType_t GetSolid() const
+	{
+		return CollisionProp()->GetSolid();
+	}
+
+	void AddSolidFlags( int flags )
+	{
+		CollisionProp()->AddSolidFlags( flags );
+	}
+
+	void RemoveSolidFlags( int flags )
+	{
+		CollisionProp()->RemoveSolidFlags( flags );
+	}
+
+	bool HasDataObjectType( int type ) const
+	{
+		return ( *(int *)((unsigned char *)this + m_fDataObjectTypesOffset)	& (1<<type) ) ? true : false;
+	}
+
+	bool IsCurrentlyTouching()
+	{
+		if ( HasDataObjectType( TOUCHLINK ) )
+		{
+			return true;
+		}
+
+		return false;
+	}
+
+	void SetCheckUntouch( bool check )
+	{
+		if(touchStampOffset == -1) {
+			sm_datatable_info_t info{};
+			datamap_t *pMap = gamehelpers->GetDataMap(this);
+			gamehelpers->FindDataMapInfo(pMap, "touchStamp", &info);
+			touchStampOffset = info.actual_offset;
+		}
+
+		// Invalidate touchstamp
+		if ( check )
+		{
+			*(int *)((unsigned char *)this + touchStampOffset) += 1;
+			if ( !(GetIEFlags() & EFL_CHECK_UNTOUCH) )
+			{
+				AddIEFlags( EFL_CHECK_UNTOUCH );
+				EntityTouch_Add( this );
+			}
+		}
+		else
+		{
+			RemoveIEFlags( EFL_CHECK_UNTOUCH );
+		}
+	}
+
+	bool IsSolid()
+	{
+		return CollisionProp()->IsSolid( );
+	}
+
+	void SetSolid( SolidType_t val )
+	{
+		CollisionProp()->SetSolid( val );
+	}
+
+	void DispatchUpdateTransmitState()
+	{
+		
+	}
+
+	void AddIEFlags(int flags)
+	{
+		if(m_iEFlagsOffset == -1) {
+			sm_datatable_info_t info{};
+			datamap_t *pMap = gamehelpers->GetDataMap(this);
+			gamehelpers->FindDataMapInfo(pMap, "m_iEFlags", &info);
+			m_iEFlagsOffset = info.actual_offset;
+		}
+
+		*(int *)((unsigned char *)this + m_iEFlagsOffset) |= flags;
+
+		if ( flags & ( EFL_FORCE_CHECK_TRANSMIT | EFL_IN_SKYBOX ) )
+		{
+			DispatchUpdateTransmitState();
+		}
+	}
+
+	void RemoveIEFlags(int flags)
+	{
+		if(m_iEFlagsOffset == -1) {
+			sm_datatable_info_t info{};
+			datamap_t *pMap = gamehelpers->GetDataMap(this);
+			gamehelpers->FindDataMapInfo(pMap, "m_iEFlags", &info);
+			m_iEFlagsOffset = info.actual_offset;
+		}
+
+		*(int *)((unsigned char *)this + m_iEFlagsOffset) &= ~flags;
+
+		if ( flags & ( EFL_FORCE_CHECK_TRANSMIT | EFL_IN_SKYBOX ) )
+		{
+			DispatchUpdateTransmitState();
+		}
+	}
+
+	void CollisionRulesChanged()
+	{
+		call_mfunc<void, CBaseEntity>(this, CBaseEntityCollisionRulesChanged);
+	}
+
+	//GARBAGE!!!
+	bool  KeyValue( const char *szKeyName, Vector vec ) { return false; }
+	bool  KeyValue( const char *szKeyName, float flValue ) { return false; }
+	static void *GetPredictionPlayer() { return nullptr; }
 };
+
+static void GetAllChildren_r( CBaseEntity *pEntity, CUtlVector<CBaseEntity *> &list )
+{
+	for ( ; pEntity != NULL; pEntity = pEntity->NextMovePeer() )
+	{
+		list.AddToTail( pEntity );
+		GetAllChildren_r( pEntity->FirstMoveChild(), list );
+	}
+}
+
+int GetAllChildren( CBaseEntity *pParent, CUtlVector<CBaseEntity *> &list )
+{
+	if ( !pParent )
+		return 0;
+
+	GetAllChildren_r( pParent->FirstMoveChild(), list );
+	return list.Count();
+}
+
+void CCollisionProperty::MarkSurroundingBoundsDirty()
+{
+	GetOuter()->AddIEFlags( EFL_DIRTY_SURROUNDING_COLLISION_BOUNDS );
+	MarkPartitionHandleDirty();
+
+#ifdef CLIENT_DLL
+	g_pClientShadowMgr->MarkRenderToTextureShadowDirty( GetOuter()->GetShadowHandle() );
+#else
+	GetOuter()->NetworkProp()->MarkPVSInformationDirty();
+#endif
+}
+
+void CCollisionProperty::MarkPartitionHandleDirty()
+{
+	// don't bother with the world
+	if ( m_pOuter->entindex() == 0 )
+		return;
+	
+	if ( !(m_pOuter->GetIEFlags() & EFL_DIRTY_SPATIAL_PARTITION) )
+	{
+		m_pOuter->AddIEFlags( EFL_DIRTY_SPATIAL_PARTITION );
+		//s_DirtyKDTree.AddEntity( m_pOuter );
+	}
+
+#ifdef CLIENT_DLL
+	GetOuter()->MarkRenderHandleDirty();
+	g_pClientShadowMgr->AddToDirtyShadowList( GetOuter() );
+#endif
+}
+
+void CCollisionProperty::UpdateServerPartitionMask( )
+{
+#ifndef CLIENT_DLL
+	SpatialPartitionHandle_t handle = GetPartitionHandle();
+	if ( handle == PARTITION_INVALID_HANDLE )
+		return;
+
+	// Remove it from whatever lists it may be in at the moment
+	// We'll re-add it below if we need to.
+	::partition->Remove( handle );
+
+	// Don't bother with deleted things
+	if ( !m_pOuter->edict() )
+		return;
+
+	// don't add the world
+	if ( m_pOuter->entindex() == 0 )
+		return;		
+
+	// Make sure it's in the list of all entities
+	bool bIsSolid = IsSolid() || IsSolidFlagSet(FSOLID_TRIGGER);
+	if ( bIsSolid || m_pOuter->GetIEFlags() & EFL_USE_PARTITION_WHEN_NOT_SOLID )
+	{
+		::partition->Insert( PARTITION_ENGINE_NON_STATIC_EDICTS, handle );
+	}
+
+	if ( !bIsSolid )
+		return;
+
+	// Insert it into the appropriate lists.
+	// We have to continually reinsert it because its solid type may have changed
+	SpatialPartitionListMask_t mask = 0;
+	if ( !IsSolidFlagSet(FSOLID_NOT_SOLID) )
+	{
+		mask |=	PARTITION_ENGINE_SOLID_EDICTS;
+	}
+	if ( IsSolidFlagSet(FSOLID_TRIGGER) )
+	{
+		mask |=	PARTITION_ENGINE_TRIGGER_EDICTS;
+	}
+	Assert( mask != 0 );
+	::partition->Insert( mask, handle );
+#endif
+}
+
+void CCollisionProperty::CheckForUntouch()
+{
+#ifndef CLIENT_DLL
+	if ( !IsSolid() && !IsSolidFlagSet(FSOLID_TRIGGER))
+	{
+		// If this ent's touch list isn't empty, it's transitioning to not solid
+		if ( m_pOuter->IsCurrentlyTouching() )
+		{
+			// mark ent so that at the end of frame it will check to 
+			// see if it's no longer touching ents
+			m_pOuter->SetCheckUntouch( true );
+		}
+	}
+#endif
+}
+
+void CCollisionProperty::SetSolidFlags( int flags )
+{
+	int oldFlags = m_usSolidFlags;
+	m_usSolidFlags = (unsigned short)(flags & 0xFFFF);
+	if ( oldFlags == m_usSolidFlags )
+		return;
+
+	// These two flags, if changed, can produce different surrounding bounds
+	if ( (oldFlags & (FSOLID_FORCE_WORLD_ALIGNED | FSOLID_USE_TRIGGER_BOUNDS)) != 
+		 (m_usSolidFlags & (FSOLID_FORCE_WORLD_ALIGNED | FSOLID_USE_TRIGGER_BOUNDS)) )
+	{
+		MarkSurroundingBoundsDirty();
+	}
+
+	if ( (oldFlags & (FSOLID_NOT_SOLID|FSOLID_TRIGGER)) != (m_usSolidFlags & (FSOLID_NOT_SOLID|FSOLID_TRIGGER)) )
+	{
+		m_pOuter->CollisionRulesChanged();
+	}
+
+#ifndef CLIENT_DLL
+	if ( (oldFlags & (FSOLID_NOT_SOLID | FSOLID_TRIGGER)) != (m_usSolidFlags & (FSOLID_NOT_SOLID | FSOLID_TRIGGER)) )
+	{
+		UpdateServerPartitionMask( );
+		CheckForUntouch();
+	}
+#endif
+}
+
+void CCollisionProperty::SetSolid( SolidType_t val )
+{
+	if ( m_nSolidType == val )
+		return;
+
+#ifndef CLIENT_DLL
+	bool bWasNotSolid = IsSolid();
+#endif
+
+	MarkSurroundingBoundsDirty();
+
+	// OBB is not yet implemented
+	if ( val == SOLID_BSP )
+	{
+		if ( GetOuter()->GetMoveParent() )
+		{
+			if ( GetOuter()->GetRootMoveParent()->GetSolid() != SOLID_BSP )
+			{
+				// must be SOLID_VPHYSICS because parent might rotate
+				val = SOLID_VPHYSICS;
+			}
+		}
+#ifndef CLIENT_DLL
+		// UNDONE: This should be fine in the client DLL too.  Move GetAllChildren() into shared code.
+		// If the root of the hierarchy is SOLID_BSP, then assume that the designer
+		// wants the collisions to rotate with this hierarchy so that the player can
+		// move while riding the hierarchy.
+		if ( !GetOuter()->GetMoveParent() )
+		{
+			// NOTE: This assumes things don't change back from SOLID_BSP
+			// NOTE: This is 100% true for HL2 - need to support removing the flag to support changing from SOLID_BSP
+			CUtlVector<CBaseEntity *> list;
+			GetAllChildren( GetOuter(), list );
+			for ( int i = list.Count()-1; i>=0; --i )
+			{
+				list[i]->AddSolidFlags( FSOLID_ROOT_PARENT_ALIGNED );
+			}
+		}
+#endif
+	}
+
+	m_nSolidType = val;
+
+#ifndef CLIENT_DLL
+	m_pOuter->CollisionRulesChanged();
+
+	UpdateServerPartitionMask( );
+
+	if ( bWasNotSolid != IsSolid() )
+	{
+		CheckForUntouch();
+	}
+#endif
+}
 
 #if SOURCE_ENGINE == SE_LEFT4DEAD2
 enum
@@ -2512,6 +2924,49 @@ static cell_t BaseEntityGetAbsOrigin(IPluginContext *pContext, const cell_t *par
 	return 0;
 }
 
+static cell_t BaseEntityIsSolid(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseEntity *pEntity = gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+	
+	return pEntity->IsSolid();
+}
+
+static cell_t BaseEntitySetSolid(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseEntity *pEntity = gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+	
+	pEntity->SetSolid((SolidType_t)params[2]);
+	return 0;
+}
+
+static cell_t BaseEntityAddSolidFlags(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseEntity *pEntity = gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+	
+	pEntity->AddSolidFlags(params[2]);
+	return 0;
+}
+
+static cell_t BaseEntityRemoveSolidFlags(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseEntity *pEntity = gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
+	
+	pEntity->RemoveSolidFlags(params[2]);
+	return 0;
+}
+
 static cell_t BaseAnimatingLookupAttachment(IPluginContext *pContext, const cell_t *params)
 {
 	CBaseAnimating *pEntity = (CBaseAnimating *)gamehelpers->ReferenceToEntity(params[1]);
@@ -3660,6 +4115,9 @@ int GetModelMaterialCount(model_t *pModel)
 		}
 		case mod_studio: {
 			MDLHandle_t studio = modelinfo->GetCacheHandle(pModel);
+			if(studio == MDLHANDLE_INVALID) {
+				return 0;
+			}
 			studiohwdata_t *pHWDdata = mdlcache->GetHardwareData(studio);
 			if(!pHWDdata) {
 				return 0;
@@ -3684,6 +4142,9 @@ const char *GetModelMaterialName(model_t *pModel, int idx)
 		} break;
 		case mod_studio: {
 			MDLHandle_t studio = modelinfo->GetCacheHandle(pModel);
+			if(studio == MDLHANDLE_INVALID) {
+				return 0;
+			}
 			studiohwdata_t *pHWDdata = mdlcache->GetHardwareData(studio);
 			if(!pHWDdata) {
 				return 0;
@@ -3719,6 +4180,10 @@ static cell_t StudioModelLODCountget(IPluginContext *pContext, const cell_t *par
 	model_t *mod = (model_t *)params[1];
 
 	MDLHandle_t studio = modelinfo->GetCacheHandle(mod);
+	if(studio == MDLHANDLE_INVALID) {
+		return 0;
+	}
+
 	studiohwdata_t *pHWDdata = mdlcache->GetHardwareData(studio);
 	if(!pHWDdata) {
 		return 0;
@@ -3732,6 +4197,10 @@ static cell_t StudioModelRootLODget(IPluginContext *pContext, const cell_t *para
 	model_t *mod = (model_t *)params[1];
 
 	MDLHandle_t studio = modelinfo->GetCacheHandle(mod);
+	if(studio == MDLHANDLE_INVALID) {
+		return 0;
+	}
+
 	studiohwdata_t *pHWDdata = mdlcache->GetHardwareData(studio);
 	if(!pHWDdata) {
 		return 0;
@@ -3745,6 +4214,10 @@ static cell_t StudioModelGetLOD(IPluginContext *pContext, const cell_t *params)
 	model_t *mod = (model_t *)params[1];
 
 	MDLHandle_t studio = modelinfo->GetCacheHandle(mod);
+	if(studio == MDLHANDLE_INVALID) {
+		return 0;
+	}
+
 	studiohwdata_t *pHWDdata = mdlcache->GetHardwareData(studio);
 	if(!pHWDdata) {
 		return 0;
@@ -3901,12 +4374,19 @@ void Sample::OnCoreMapStart(edict_t *pEdictList, int edictCount, int clientMax)
 #endif
 }
 
+static cell_t register_matproxy(IPluginContext *pContext, const cell_t *params);
+
 static const sp_nativeinfo_t g_sNativesInfo[] =
 {
+	{"register_matproxy", register_matproxy},
 	{"EntitySetAbsOrigin", BaseEntitySetAbsOrigin},
 	{"EntityWorldSpaceCenter", BaseEntityWorldSpaceCenter},
 	{"EntityEyePosition", BaseEntityEyePosition},
 	{"EntityGetAbsOrigin", BaseEntityGetAbsOrigin},
+	{"EntityIsSolid", BaseEntityIsSolid},
+	{"EntitySetSolid", BaseEntitySetSolid},
+	{"EntityAddSolidFlags", BaseEntityAddSolidFlags},
+	{"EntityRemoveSolidFlags", BaseEntityRemoveSolidFlags},
 	{"AnimatingSelectWeightedSequence", BaseAnimatingSelectWeightedSequenceEx},
 	{"AnimatingSelectHeaviestSequence", BaseAnimatingSelectHeaviestSequenceEx},
 	{"AnimatingLookupSequence", BaseAnimatingLookupSequence},
@@ -4021,6 +4501,408 @@ static const sp_nativeinfo_t g_sNativesInfo[] =
 	{nullptr, nullptr},
 };
 
+#include <materialsystem/imaterialproxyfactory.h>
+#include <materialsystem/imaterialproxy.h>
+
+class CDummyMaterialProxy : public IMaterialProxy
+{
+public:
+	bool Init( IMaterial* pMaterial, KeyValues *pKeyValues ) override
+	{
+		return true;
+	}
+
+	~CDummyMaterialProxy() override
+	{
+		
+	}
+
+	void OnBind( void *pObject ) override
+	{
+		
+	}
+
+	void Release() override
+	{
+		
+	}
+
+	IMaterial *GetMaterial() override
+	{ return nullptr; }
+};
+
+#include "funnyfile.h"
+
+HandleType_t matproxy_handle = 0;
+
+struct matproxy_entry_t;
+
+class CSPMaterialProxy : public CDummyMaterialProxy
+{
+public:
+	CSPMaterialProxy(std::string &&name_, IPluginFunction *func_)
+		: CDummyMaterialProxy{}, name{name_}, func{func_}
+	{
+	}
+
+	bool Init( IMaterial* pMaterial, KeyValues *pKeyValues ) override
+	{
+		if(!CDummyMaterialProxy::Init(pMaterial, pKeyValues)) {
+			return false;
+		}
+
+		m_pMaterial = pMaterial;
+		m_pKeyValues = new KeyValues{""};
+		m_pKeyValues->RecursiveMergeKeyValues(pKeyValues);
+
+		return true;
+	}
+
+	~CSPMaterialProxy() override
+	{
+		if(m_pKeyValues) {
+			m_pKeyValues->deleteThis();
+		}
+	}
+
+	IMaterial *GetMaterial() override
+	{ return m_pMaterial; }
+
+	void OnBind( void *pObject ) override
+	{
+		CBaseEntity *pEntity = (CBaseEntity *)pObject;
+		IMaterial *pMaterial = GetMaterial();
+		KeyValues *pKeyValues = m_pKeyValues;
+
+		if(!pMaterial || !pEntity) {
+			return;
+		}
+
+		if(!func) {
+			return;
+		}
+
+		HandleError err{};
+		Handle_t kvhndl = ((HandleSystemHack *)handlesys)->CreateKeyValuesHandle(pKeyValues, nullptr, &err);
+		if(err != HandleError_None) {
+			func->GetParentContext()->ReportError("Invalid KeyValues handle %x (error %d).", kvhndl, err);
+			return;
+		}
+
+		const char *matname{pMaterial->GetName()};
+		func->PushCell(gamehelpers->EntityToBCompatRef(pEntity));
+		func->PushStringEx((char *)matname, strlen(matname)+1, SM_PARAM_STRING_COPY|SM_PARAM_STRING_UTF8, 0);
+		func->PushCell(kvhndl);
+		func->Execute(nullptr);
+	}
+
+	void Release() override
+	{
+		m_pMaterial = nullptr;
+		m_pKeyValues->deleteThis();
+		m_pKeyValues = nullptr;
+
+		CDummyMaterialProxy::Release();
+
+		func = nullptr;
+	}
+
+	void EntryDeleted();
+
+	IMaterial *m_pMaterial = nullptr;
+	KeyValues *m_pKeyValues = nullptr;
+	std::string name;
+
+	IPluginFunction *func = nullptr;
+	matproxy_entry_t *entry = nullptr;
+};
+
+std::unordered_map<std::string, matproxy_entry_t *> matproxy_entries;
+
+struct matproxy_entry_t
+{
+	matproxy_entry_t(std::string &&name_, IPluginFunction *func_)
+		: name{name_}, func{func_}
+	{
+		matproxy_entries.emplace(name, this);
+	}
+
+	~matproxy_entry_t()
+	{
+		for(CSPMaterialProxy *it : childs) {
+			it->entry = nullptr;
+			it->EntryDeleted();
+		}
+
+		auto it{matproxy_entries.find(name)};
+		if(it != matproxy_entries.cend()) {
+			matproxy_entries.erase(it);
+		}
+	}
+
+	IMaterialProxy *create()
+	{
+		std::string tmpname{name};
+		CSPMaterialProxy *ptr{new CSPMaterialProxy{std::move(tmpname), func}};
+		ptr->entry = this;
+		childs.emplace_back(ptr);
+		return ptr;
+	}
+
+	void child_deleted(CSPMaterialProxy *ptr)
+	{
+		auto it{std::find(childs.begin(), childs.end(), ptr)};
+		if(it != childs.end()) {
+			childs.erase(it);
+		}
+	}
+
+	IPluginFunction *func = nullptr;
+	std::vector<CSPMaterialProxy *> childs;
+	std::string name;
+};
+
+void CSPMaterialProxy::EntryDeleted()
+{
+	func = nullptr;
+
+	if(entry) {
+		entry->child_deleted(this);
+		entry = nullptr;
+	}
+}
+
+void Sample::OnHandleDestroy(HandleType_t type, void *object)
+{
+	if(type == matproxy_handle) {
+		matproxy_entry_t *obj = (matproxy_entry_t *)object;
+		delete obj;
+	}
+}
+
+class CSPMaterialProxyFactory : public IMaterialProxyFactory
+{
+public:
+	static inline std::string_view default_proxies[]{
+		"ParticleSphereProxy"sv,
+		"TextureScroll"sv,
+		"Sine"sv,
+		"ItemTintColor"sv,
+		"LinearRamp"sv,
+		"Add"sv,
+		"TextureTransform"sv,
+		"SelectFirstIfNonZero"sv,
+		"AnimatedTexture"sv,
+		"WaterLOD"sv,
+		"Equals"sv,
+		"PlayerProximity"sv,
+		"Divide"sv,
+		"Multiply"sv,
+		"Subtract"sv,
+		"Clamp"sv,
+		"PlayerTeamMatch"sv,
+		"MaterialModify"sv,
+		"MaterialModifyAnimated"sv,
+		"AnimatedWeaponSheen"sv,
+		"ModelGlowColor"sv,
+		"YellowLevel"sv,
+		"weapon_invis"sv,
+		"invis"sv,
+		"BurnLevel"sv,
+		"CommunityWeapon"sv,
+		"StickybombGlowColor"sv,
+		"building_invis"sv,
+		"ShieldFalloff"sv,
+		"WeaponSkin"sv,
+		"spy_invis"sv,
+		"CustomSteamImageOnModel"sv,
+		"WheatlyEyeGlow"sv,
+		"BuildingRescueLevel"sv,
+		"StatTrakIcon"sv,
+		"StatTrakDigit"sv,
+		"StatTrakIllum"sv,
+		"LessOrEqual"sv,
+		"InvulnLevel"sv,
+		"Monitor"sv,
+		"vm_invis"sv,
+	};
+
+	static bool is_default_proxy(std::string_view name)
+	{
+		for(std::string_view def : default_proxies) {
+			if(def == name) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	IMaterialProxy *CreateProxy(const char *proxyName) override
+	{
+		std::string name{proxyName};
+
+		if(is_default_proxy(name)) {
+			return new CDummyMaterialProxy{};
+		}
+
+		auto it{matproxy_entries.find(name)};
+		if(it == matproxy_entries.cend()) {
+			return nullptr;
+		}
+
+		return it->second->create();
+	}
+
+	void DeleteProxy(IMaterialProxy *pProxy) override
+	{
+		CDummyMaterialProxy *dummy = (CDummyMaterialProxy *)pProxy;
+		pProxy->Release();
+		delete dummy;
+	}
+};
+
+static CSPMaterialProxyFactory proxyfactory;
+
+static cell_t register_matproxy(IPluginContext *pContext, const cell_t *params)
+{
+	char *name_ptr = nullptr;
+	pContext->LocalToString(params[1], &name_ptr);
+	std::string name{name_ptr};
+	
+	auto it{matproxy_entries.find(name)};
+	if(it != matproxy_entries.cend()) {
+		return pContext->ThrowNativeError("%s is already registered", name_ptr);
+	}
+
+	IPluginFunction *func = pContext->GetFunctionById(params[2]);
+
+	matproxy_entry_t *obj = new matproxy_entry_t{std::move(name), func};
+	return handlesys->CreateHandle(matproxy_handle, obj, pContext->GetIdentity(), myself->GetIdentity(), nullptr);
+}
+
+static CDetour *SV_ComputeClientPacks_detour{nullptr};
+
+class CFrameSnapshot;
+class CGameClient;
+
+class CFrameSnapshot
+{
+	DECLARE_FIXEDSIZE_ALLOCATOR( CFrameSnapshot );
+
+public:
+
+							CFrameSnapshot();
+							~CFrameSnapshot();
+
+	// Reference-counting.
+	void					AddReference();
+	void					ReleaseReference();
+
+	CFrameSnapshot*			NextSnapshot() const;						
+
+
+public:
+	CInterlockedInt			m_ListIndex;	// Index info CFrameSnapshotManager::m_FrameSnapshots.
+
+	// Associated frame. 
+	int						m_nTickCount; // = sv.tickcount
+	
+	// State information
+	class CFrameSnapshotEntry		*m_pEntities;	
+	int						m_nNumEntities; // = sv.num_edicts
+
+	// This list holds the entities that are in use and that also aren't entities for inactive clients.
+	unsigned short			*m_pValidEntities; 
+	int						m_nValidEntities;
+
+	// Additional HLTV info
+	class CHLTVEntityData			*m_pHLTVEntityData; // is NULL if not in HLTV mode or array of m_pValidEntities entries
+	class CReplayEntityData		*m_pReplayEntityData; // is NULL if not in replay mode or array of m_pValidEntities entries
+
+	class CEventInfo				**m_pTempEntities; // temp entities
+	int						m_nTempEntities;
+
+	CUtlVector<int>			m_iExplicitDeleteSlots;
+
+private:
+
+	// Snapshots auto-delete themselves when their refcount goes to zero.
+	CInterlockedInt			m_nReferences;
+};
+
+DETOUR_DECL_STATIC3(SV_ComputeClientPacks, void, int, clientCount, CGameClient **, clients, CFrameSnapshot *, snapshot)
+{
+#ifdef __HAS_PROXYSEND
+	if(!proxysend)
+#endif
+	{
+		for(int i{0}; i < snapshot->m_nValidEntities; ++i) {
+			int idx{snapshot->m_pValidEntities[i]};
+			int ref{gamehelpers->IndexToReference(idx)};
+
+			CBaseEntity *pEntity{gamehelpers->ReferenceToEntity(ref)};
+			if(pEntity) {
+				g_Sample.pre_pack_entity(pEntity);
+			}
+		}
+	}
+
+	DETOUR_STATIC_CALL(SV_ComputeClientPacks)(clientCount, clients, snapshot);
+}
+
+void Sample::pre_pack_entity(CBaseEntity *pEntity) const noexcept
+{
+	if(matproxy_entries.empty()) {
+		return;
+	}
+
+	const char *classname = gamehelpers->GetEntityClassname(pEntity);
+	if(strcmp(classname, "phys_bone_follower") == 0) {
+		return;
+	}
+
+	int mdlidx = pEntity->GetModelIndex();
+	if(mdlidx == -1) {
+		return;
+	}
+
+	const model_t *mdlptr = modelinfo->GetModel(mdlidx);
+	if(!mdlptr) {
+		return;
+	}
+
+	if(modelinfo->GetModelType(mdlptr) != mod_studio) {
+		return;
+	}
+
+	MDLHandle_t mdlhndl = modelinfo->GetCacheHandle(mdlptr);
+	if(mdlhndl == MDLHANDLE_INVALID) {
+		return;
+	}
+
+	studiohwdata_t *pHWDdata = mdlcache->GetHardwareData(mdlhndl);
+	if(!pHWDdata) {
+		return;
+	}
+
+	std::vector<IMaterial *> already_binded{};
+
+	for(int i = 0; i < pHWDdata->m_NumLODs; ++i) {
+		studioloddata_t *pLOD = &pHWDdata->m_pLODs[i];
+		for(int j = 0; j < pLOD->numMaterials; ++j) {
+			IMaterial *pMaterial = pLOD->ppMaterials[j];
+
+			if(std::find(already_binded.begin(), already_binded.end(), pMaterial) != already_binded.end()) {
+				continue;
+			}
+
+			pMaterial->CallBindProxy( (void *)pEntity );
+
+			already_binded.emplace_back(pMaterial);
+		}
+	}
+}
+
 bool Sample::SDK_OnMetamodLoad(ISmmAPI *ismm, char *error, size_t maxlen, bool late)
 {
 	gpGlobals = ismm->GetCGlobals();
@@ -4028,6 +4910,10 @@ bool Sample::SDK_OnMetamodLoad(ISmmAPI *ismm, char *error, size_t maxlen, bool l
 	GET_V_IFACE_CURRENT(GetEngineFactory, filesystem, IFileSystem, FILESYSTEM_INTERFACE_VERSION)
 	GET_V_IFACE_CURRENT(GetEngineFactory, mdlcache, IMDLCache, MDLCACHE_INTERFACE_VERSION)
 	GET_V_IFACE_CURRENT(GetEngineFactory, materials, IMaterialSystem, MATERIAL_SYSTEM_INTERFACE_VERSION)
+	GET_V_IFACE_CURRENT(GetEngineFactory, partition, ISpatialPartition, INTERFACEVERSION_SPATIALPARTITION)
+
+	materials->SetMaterialProxyFactory(&proxyfactory);
+
 	return true;
 }
 
@@ -4065,17 +4951,23 @@ void Sample::OnPluginUnloaded(IPlugin *plugin)
 	}
 }
 
+IGameConfig *g_pGameConf = nullptr;
+
 bool Sample::SDK_OnLoad(char *error, size_t maxlen, bool late)
 {
-	IGameConfig *g_pGameConf = nullptr;
 	gameconfs->LoadGameConfigFile("animhelpers", &g_pGameConf, error, maxlen);
-	
+
+	CDetourManager::Init(g_pSM->GetScriptingEngine(), g_pGameConf);
+
 	g_pGameConf->GetOffset("CBaseAnimating::HandleAnimEvent", &CBaseAnimatingHandleAnimEvent);
 	SH_MANUALHOOK_RECONFIGURE(HandleAnimEvent, CBaseAnimatingHandleAnimEvent, 0, 0);
 	
 	g_pGameConf->GetOffset("CBaseEntity::WorldSpaceCenter", &CBaseEntityWorldSpaceCenter);
 	g_pGameConf->GetOffset("CBaseEntity::EyePosition", &CBaseEntityEyePosition);
-	
+
+	g_pGameConf->GetMemSig("CBaseEntity::CollisionRulesChanged", &CBaseEntityCollisionRulesChanged);
+	g_pGameConf->GetMemSig("EntityTouch_Add", &EntityTouch_AddPtr);
+
 	g_pGameConf->GetOffset("CBaseAnimating::m_pStudioHdr", &m_pStudioHdrOffset);
 	
 	g_pGameConf->GetOffset("CBaseAnimating::StudioFrameAdvance", &CBaseAnimatingStudioFrameAdvance);
@@ -4101,8 +4993,10 @@ bool Sample::SDK_OnLoad(char *error, size_t maxlen, bool late)
 	g_pGameConf->GetMemSig("g_nActivityListVersion", (void **)&g_nActivityListVersion);
 	g_pGameConf->GetMemSig("g_nEventListVersion", (void **)&g_nEventListVersion);
 
-	gameconfs->CloseGameConfigFile(g_pGameConf);
-	
+	SV_ComputeClientPacks_detour = DETOUR_CREATE_STATIC(SV_ComputeClientPacks, "SV_ComputeClientPacks");
+
+	g_pEntityList = reinterpret_cast<CBaseEntityList *>(gamehelpers->GetGlobalEntityList());
+
 	sm_sendprop_info_t info{};
 	gamehelpers->FindSendPropInfo("CBaseAnimating", "m_nSequence", &info);
 	m_nSequenceOffset = info.actual_offset;
@@ -4134,19 +5028,76 @@ bool Sample::SDK_OnLoad(char *error, size_t maxlen, bool late)
 	gamehelpers->FindSendPropInfo("CBaseAnimating", "m_hLightingOrigin", &info);
 	m_pStudioHdrOffset += info.actual_offset;
 
+	gamehelpers->FindSendPropInfo("CBaseEntity", "m_bIsPlayerSimulated", &info);
+	m_fDataObjectTypesOffset = info.actual_offset;
+	m_fDataObjectTypesOffset += 1 + sizeof(EHANDLE);
+
 	sharesys->AddNatives(myself, g_sNativesInfo);
 	
 	plsys->AddPluginsListener(this);
 
+	matproxy_handle = handlesys->CreateType("matproxy", this, 0, nullptr, nullptr, myself->GetIdentity(), nullptr);
+
 	sharesys->RegisterLibrary(myself, "animhelpers");
 	sharesys->AddInterface(myself, this);
+
+#ifdef __HAS_PROXYSEND
+	sharesys->AddDependency(myself, "proxysend.ext", false, true);
+#endif
+
+	HandleSystemHack::init();
 
 	return true;
 }
 
+void Sample::SDK_OnAllLoaded()
+{
+#ifdef __HAS_PROXYSEND
+	SM_GET_LATE_IFACE(PROXYSEND, proxysend);
+	if(proxysend) {
+		proxysend->add_listener(this);
+		SV_ComputeClientPacks_detour->DisableDetour();
+	} else {
+		SV_ComputeClientPacks_detour->EnableDetour();
+	}
+#endif
+}
+
+bool Sample::QueryRunning(char *error, size_t maxlength)
+{
+#ifdef __HAS_PROXYSEND
+	//SM_CHECK_IFACE(PROXYSEND, proxysend);
+#endif
+	return true;
+}
+
+bool Sample::QueryInterfaceDrop(SMInterface *pInterface)
+{
+#ifdef __HAS_PROXYSEND
+	if(pInterface == proxysend)
+		return false;
+#endif
+	
+	return IExtensionInterface::QueryInterfaceDrop(pInterface);
+}
+
+void Sample::NotifyInterfaceDrop(SMInterface *pInterface)
+{
+#ifdef __HAS_PROXYSEND
+	if(strcmp(pInterface->GetInterfaceName(), SMINTERFACE_PROXYSEND_NAME) == 0) {
+		proxysend = NULL;
+		SV_ComputeClientPacks_detour->EnableDetour();
+	}
+#endif
+}
+
 void Sample::SDK_OnUnload()
 {
-	
+	handlesys->RemoveType(matproxy_handle, myself->GetIdentity());
+
+	SV_ComputeClientPacks_detour->Destroy();
+
+	gameconfs->CloseGameConfigFile(g_pGameConf);
 }
 
 int Sample::SelectWeightedSequence(CBaseAnimating *pEntity, int activity)
@@ -4177,4 +5128,9 @@ const char *Sample::ActivityName(int activity)
 const char *Sample::SequenceName(CBaseAnimating *pEntity, int sequence)
 {
 	return pEntity->GetSequenceName(sequence);
+}
+
+Activity Sample::SequenceActivity(CBaseAnimating *pEntity, int sequence)
+{
+	return pEntity->GetSequenceActivity(sequence);
 }

@@ -6,6 +6,14 @@ projectName = 'animhelpers'
 # smsdk_ext.cpp will be automatically added later
 sourceFiles = [
   'extension.cpp',
+  os.path.join(Extension.sm_root, 'public', 'CDetour', 'detours.cpp'),
+  os.path.join(Extension.sm_root, 'public', 'asm', 'asm.c'),
+  os.path.join(Extension.sm_root, 'public', 'libudis86/decode.c'),
+  os.path.join(Extension.sm_root, 'public', 'libudis86/itab.c'),
+  os.path.join(Extension.sm_root, 'public', 'libudis86/syn-att.c'),
+  os.path.join(Extension.sm_root, 'public', 'libudis86/syn-intel.c'),
+  os.path.join(Extension.sm_root, 'public', 'libudis86/syn.c'),
+  os.path.join(Extension.sm_root, 'public', 'libudis86/udis86.c'),
 ]
 
 ###############
@@ -13,6 +21,17 @@ sourceFiles = [
 # Simple extensions do not need to modify past this point.
 
 project = Extension.HL2Project(builder, projectName + '.ext')
+
+project.compiler.cxxincludes += [Extension.sm_root]
+
+proxysendpath = os.path.join(builder.currentSourcePath, '../proxysend')
+if not os.path.exists(proxysendpath):
+	if 'PROXYSENDSRC' in os.environ:
+		proxysendpath = os.environ['PROXYSENDSRC']
+
+if os.path.exists(proxysendpath):
+	project.compiler.defines += ['__HAS_PROXYSEND']
+	project.compiler.cxxincludes += [proxysendpath,os.path.join(proxysendpath,'public')]
 
 if os.path.isfile(os.path.join(builder.currentSourcePath, 'sdk', 'smsdk_ext.cpp')):
   # Use the copy included in the project

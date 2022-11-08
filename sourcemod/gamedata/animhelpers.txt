@@ -25,6 +25,16 @@
 				"library" "server"
 				"linux" "@_ZN11CBaseEntity12SetAbsOriginERK6Vector"
 			}
+			"CBaseEntity::CollisionRulesChanged"
+			{
+				"library" "server"
+				"linux" "@_ZN11CBaseEntity21CollisionRulesChangedEv"
+			}
+			"EntityTouch_Add"
+			{
+				"library" "server"
+				"linux" "@_Z15EntityTouch_AddP11CBaseEntity"
+			}
 			"CBaseEntity::CalcAbsolutePosition"
 			{
 				"library" "server"
@@ -79,6 +89,11 @@
 			{
 				"library" "server"
 				"linux" "@g_nActivityListVersion"
+			}
+			"SV_ComputeClientPacks"
+			{
+				"library" "engine"
+				"linux" "@_Z21SV_ComputeClientPacksiPP11CGameClientP14CFrameSnapshot"
 			}
 		}
 	}

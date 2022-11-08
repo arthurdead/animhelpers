@@ -10,6 +10,9 @@
 	#error please define either GAME_TF2 or GAME_L4D2
 #endif
 
+#define SOLID_NONE 0
+#define FSOLID_NOT_SOLID 0x0004
+
 enum struct animevent_t
 {
 	int event;
@@ -27,8 +30,21 @@ enum struct animevent_t
 
 native void EntityEyePosition(int entity, float eyes[3]);
 native void EntityWorldSpaceCenter(int entity, float center[3]);
+
 native void EntityGetAbsOrigin(int entity, float pos[3]);
 native void EntitySetAbsOrigin(int entity, const float pos[3]);
+
+native bool EntityIsSolid(int entity);
+native void EntitySetSolid(int entity, int solid);
+
+native void EntityAddSolidFlags(int entity, int flags);
+native void EntityRemoveSolidFlags(int entity, int flags);
+
+native void set_material_var(int entity, const char[] material, const char[] variable, const char[] value);
+
+typedef matproxy_func_t = function void (int entity, const char[] material, KeyValues data);
+
+native Handle register_matproxy(const char[] name, matproxy_func_t func);
 
 typedef handleanimevent_func_t = function Action (int entity, animevent_t event);
 
