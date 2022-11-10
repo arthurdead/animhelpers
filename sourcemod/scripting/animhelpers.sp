@@ -1,5 +1,6 @@
 #include <sourcemod>
 #include <animhelpers>
+#include <regex>
 
 #define MATERIAL_MODIFY_STRING_SIZE 255
 
@@ -43,7 +44,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int length)
 {
 	RegPluginLibrary("animhelpers");
 	CreateNative("AddModelToDownloadsTable", native_AddModelToDownloadsTable);
-	CreateNative("set_material_var", native_set_material_var);
+	CreateNative("SetMaterialVar", native_set_material_var);
 	return APLRes_Success;
 }
 

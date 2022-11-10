@@ -4,11 +4,6 @@
 #define animhelpers_included
 
 #include <sdktools>
-#include <regex>
-
-#if !defined GAME_TF2 && !defined GAME_L4D2
-	#error please define either GAME_TF2 or GAME_L4D2
-#endif
 
 #define SOLID_NONE 0
 #define FSOLID_NOT_SOLID 0x0004
@@ -40,13 +35,10 @@ native void EntitySetSolid(int entity, int solid);
 native void EntityAddSolidFlags(int entity, int flags);
 native void EntityRemoveSolidFlags(int entity, int flags);
 
-native void set_material_var(int entity, const char[] material, const char[] variable, const char[] value);
+native void SetMaterialVar(int entity, const char[] material, const char[] variable, const char[] value);
 
 typedef matproxy_func_t = function void (int entity, const char[] material, KeyValues data);
-
-native Handle register_matproxy(const char[] name, matproxy_func_t func);
-
-typedef handleanimevent_func_t = function Action (int entity, animevent_t event);
+native Handle RegisterMatProxy(const char[] name, matproxy_func_t func);
 
 native Activity AnimatingLookupActivity(int entity, const char[] name);
 native int AnimatingSelectWeightedSequence(int entity, Activity activity);
@@ -118,6 +110,7 @@ stock int AnimatingSequenceFrame(int entity)
 	return RoundToFloor((cycle * float(num_frames)) / 1.0);
 }
 
+typedef handleanimevent_func_t = function Action (int entity, animevent_t event);
 native void AnimatingHookHandleAnimEvent(int entity, handleanimevent_func_t func);
 native void AnimatingHandleAnimEvent(int entity, animevent_tVar event);
 

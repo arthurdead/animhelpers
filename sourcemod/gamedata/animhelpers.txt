@@ -168,6 +168,10 @@
 				"linux" "60"
 				"windows" "60"
 			}
+			"CBaseEntity::UpdateOnRemove"
+			{
+				"linux" "109"
+			}
 		}
 	}
 }

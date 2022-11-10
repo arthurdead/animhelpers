@@ -3572,23 +3572,26 @@ void AddrToAnimEvent(animevent_t *pEvent, const cell_t *addr)
 	pEvent->pSource = (CBaseAnimating *)gamehelpers->ReferenceToEntity(*tmp_addr);
 }
 
+SH_DECL_MANUALHOOK0_void(UpdateOnRemove, 0, 0, 0)
+
 struct callback_holder_t
 {
 	IChangeableForward *fwd = nullptr;
 	std::vector<IdentityToken_t *> owners{};
-	bool erase = true;
 	int ref = -1;
-	
+	std::vector<int> hookids{};
+
 	callback_holder_t(CBaseEntity *pEntity, int ref_);
 	~callback_holder_t();
 
-	void dtor(CBaseEntity *pEntity)
+	void removed(CBaseEntity *pEntity)
 	{
-		SH_REMOVE_MANUALHOOK(GenericDtor, pEntity, SH_MEMBER(this, &callback_holder_t::HookEntityDtor), false);
-		SH_REMOVE_MANUALHOOK(HandleAnimEvent, pEntity, SH_MEMBER(this, &callback_holder_t::HookHandleAnimEvent), false);
+		for(int id : hookids) {
+			SH_REMOVE_HOOK_ID(id);
+		}
 	}
 
-	void HookEntityDtor();
+	void HookEntityRemove();
 	
 	void HookHandleAnimEvent(animevent_t *pEvent)
 	{
@@ -3627,13 +3630,12 @@ struct callback_holder_t
 using callback_holder_map_t = std::unordered_map<int, callback_holder_t *>;
 callback_holder_map_t callbackmap{};
 
-void callback_holder_t::HookEntityDtor()
+void callback_holder_t::HookEntityRemove()
 {
 	CBaseEntity *pEntity = META_IFACEPTR(CBaseEntity);
 	int this_ref = gamehelpers->EntityToReference(pEntity);
-	dtor(pEntity);
+	removed(pEntity);
 	callbackmap.erase(this_ref);
-	erase = false;
 	delete this;
 	RETURN_META(MRES_HANDLED);
 }
@@ -3641,8 +3643,8 @@ void callback_holder_t::HookEntityDtor()
 callback_holder_t::callback_holder_t(CBaseEntity *pEntity, int ref_)
 	: ref{ref_}
 {
-	SH_ADD_MANUALHOOK(GenericDtor, pEntity, SH_MEMBER(this, &callback_holder_t::HookEntityDtor), false);
-	SH_ADD_MANUALHOOK(HandleAnimEvent, pEntity, SH_MEMBER(this, &callback_holder_t::HookHandleAnimEvent), false);
+	hookids.emplace_back(SH_ADD_MANUALHOOK(UpdateOnRemove, pEntity, SH_MEMBER(this, &callback_holder_t::HookEntityRemove), false));
+	hookids.emplace_back(SH_ADD_MANUALHOOK(HandleAnimEvent, pEntity, SH_MEMBER(this, &callback_holder_t::HookHandleAnimEvent), false));
 
 	fwd = forwards->CreateForwardEx(nullptr, ET_Hook, 2, nullptr, Param_Cell, Param_Array);
 
@@ -3653,10 +3655,6 @@ callback_holder_t::~callback_holder_t()
 {
 	if(fwd) {
 		forwards->ReleaseForward(fwd);
-	}
-
-	if(erase) {
-		callbackmap.erase(ref);
 	}
 }
 
@@ -4378,7 +4376,7 @@ static cell_t register_matproxy(IPluginContext *pContext, const cell_t *params);
 
 static const sp_nativeinfo_t g_sNativesInfo[] =
 {
-	{"register_matproxy", register_matproxy},
+	{"RegisterMatProxy", register_matproxy},
 	{"EntitySetAbsOrigin", BaseEntitySetAbsOrigin},
 	{"EntityWorldSpaceCenter", BaseEntityWorldSpaceCenter},
 	{"EntityEyePosition", BaseEntityEyePosition},
@@ -4687,7 +4685,6 @@ public:
 		"ParticleSphereProxy"sv,
 		"TextureScroll"sv,
 		"Sine"sv,
-		"ItemTintColor"sv,
 		"LinearRamp"sv,
 		"Add"sv,
 		"TextureTransform"sv,
@@ -4703,8 +4700,14 @@ public:
 		"PlayerTeamMatch"sv,
 		"MaterialModify"sv,
 		"MaterialModifyAnimated"sv,
-		"AnimatedWeaponSheen"sv,
+		"LessOrEqual"sv,
+		"Monitor"sv,
+	#if SOURCE_ENGINE == SE_TF2
+		"ItemTintColor"sv,
+		"vm_invis"sv,
+		"CustomSteamImageOnModel"sv,
 		"ModelGlowColor"sv,
+		"AnimatedWeaponSheen"sv,
 		"YellowLevel"sv,
 		"weapon_invis"sv,
 		"invis"sv,
@@ -4715,16 +4718,13 @@ public:
 		"ShieldFalloff"sv,
 		"WeaponSkin"sv,
 		"spy_invis"sv,
-		"CustomSteamImageOnModel"sv,
 		"WheatlyEyeGlow"sv,
 		"BuildingRescueLevel"sv,
 		"StatTrakIcon"sv,
 		"StatTrakDigit"sv,
 		"StatTrakIllum"sv,
-		"LessOrEqual"sv,
 		"InvulnLevel"sv,
-		"Monitor"sv,
-		"vm_invis"sv,
+	#endif
 	};
 
 	static bool is_default_proxy(std::string_view name)
@@ -4938,9 +4938,8 @@ void Sample::OnPluginUnloaded(IPlugin *plugin)
 			if(func_count == 0) {
 				CBaseEntity *pEntity = gamehelpers->ReferenceToEntity(holder->ref);
 				if(pEntity) {
-					holder->dtor(pEntity);
+					holder->removed(pEntity);
 				}
-				holder->erase = false;
 				delete holder;
 				it = callbackmap.erase(it);
 				continue;
@@ -4955,45 +4954,171 @@ IGameConfig *g_pGameConf = nullptr;
 
 bool Sample::SDK_OnLoad(char *error, size_t maxlen, bool late)
 {
-	gameconfs->LoadGameConfigFile("animhelpers", &g_pGameConf, error, maxlen);
+	if(!gameconfs->LoadGameConfigFile("animhelpers", &g_pGameConf, error, maxlen)) {
+		return false;
+	}
+
+	int CBaseEntityUpdateOnRemove{-1};
+	g_pGameConf->GetOffset("CBaseEntity::UpdateOnRemove", &CBaseEntityUpdateOnRemove);
+	if(CBaseEntityUpdateOnRemove == -1) {
+		snprintf(error, maxlen, "could not get CBaseEntity::UpdateOnRemove offset");
+		return false;
+	}
+
+	g_pGameConf->GetOffset("CBaseAnimating::HandleAnimEvent", &CBaseAnimatingHandleAnimEvent);
+	if(CBaseAnimatingHandleAnimEvent == -1) {
+		snprintf(error, maxlen, "could not get CBaseAnimating::HandleAnimEvent offset");
+		return false;
+	}
+
+	g_pGameConf->GetOffset("CBaseEntity::WorldSpaceCenter", &CBaseEntityWorldSpaceCenter);
+	if(CBaseEntityWorldSpaceCenter == -1) {
+		snprintf(error, maxlen, "could not get CBaseEntity::WorldSpaceCenter offset");
+		return false;
+	}
+
+	g_pGameConf->GetOffset("CBaseEntity::EyePosition", &CBaseEntityEyePosition);
+	if(CBaseEntityEyePosition == -1) {
+		snprintf(error, maxlen, "could not get CBaseEntity::EyePosition offset");
+		return false;
+	}
+
+	g_pGameConf->GetMemSig("CBaseEntity::CollisionRulesChanged", &CBaseEntityCollisionRulesChanged);
+	if(CBaseEntityCollisionRulesChanged == nullptr) {
+		snprintf(error, maxlen, "could not get CBaseEntity::CollisionRulesChanged address");
+		return false;
+	}
+
+	g_pGameConf->GetMemSig("EntityTouch_Add", &EntityTouch_AddPtr);
+	if(EntityTouch_AddPtr == nullptr) {
+		snprintf(error, maxlen, "could not get EntityTouch_Add address");
+		return false;
+	}
+
+	g_pGameConf->GetOffset("CBaseAnimating::m_pStudioHdr", &m_pStudioHdrOffset);
+	if(m_pStudioHdrOffset == -1) {
+		snprintf(error, maxlen, "could not get CBaseAnimating::m_pStudioHdr offset");
+		return false;
+	}
+
+	g_pGameConf->GetOffset("CBaseAnimating::StudioFrameAdvance", &CBaseAnimatingStudioFrameAdvance);
+	if(CBaseAnimatingStudioFrameAdvance == -1) {
+		snprintf(error, maxlen, "could not get CBaseAnimating::StudioFrameAdvance offset");
+		return false;
+	}
+
+	g_pGameConf->GetOffset("CBaseAnimating::DispatchAnimEvents", &CBaseAnimatingDispatchAnimEvents);
+	if(CBaseAnimatingDispatchAnimEvents == -1) {
+		snprintf(error, maxlen, "could not get CBaseAnimating::DispatchAnimEvents offset");
+		return false;
+	}
+
+	g_pGameConf->GetOffset("CBaseAnimating::GetAttachment", &CBaseAnimatingGetAttachment);
+	if(CBaseAnimatingGetAttachment == -1) {
+		snprintf(error, maxlen, "could not get CBaseAnimating::GetAttachment offset");
+		return false;
+	}
+
+	g_pGameConf->GetOffset("CBaseAnimating::GetBoneTransform", &CBaseAnimatingGetBoneTransform);
+	if(CBaseAnimatingGetBoneTransform == -1) {
+		snprintf(error, maxlen, "could not get CBaseAnimating::GetBoneTransform offset");
+		return false;
+	}
+
+	g_pGameConf->GetMemSig("CBaseAnimating::ResetSequenceInfo", &CBaseAnimatingResetSequenceInfo);
+	if(CBaseAnimatingResetSequenceInfo == nullptr) {
+		snprintf(error, maxlen, "could not get CBaseAnimating::ResetSequenceInfo address");
+		return false;
+	}
+
+	g_pGameConf->GetMemSig("CBaseAnimating::LockStudioHdr", &CBaseAnimatingLockStudioHdr);
+	if(CBaseAnimatingLockStudioHdr == nullptr) {
+		snprintf(error, maxlen, "could not get CBaseAnimating::LockStudioHdr address");
+		return false;
+	}
+
+	g_pGameConf->GetMemSig("CBaseEntity::CalcAbsolutePosition", &CBaseEntityCalcAbsolutePosition);
+	if(CBaseEntityCalcAbsolutePosition == nullptr) {
+		snprintf(error, maxlen, "could not get CBaseEntity::CalcAbsolutePosition address");
+		return false;
+	}
+
+	g_pGameConf->GetMemSig("CBaseEntity::SetAbsOrigin", &CBaseEntitySetAbsOrigin);
+	if(CBaseEntitySetAbsOrigin == nullptr) {
+		snprintf(error, maxlen, "could not get CBaseEntity::SetAbsOrigin address");
+		return false;
+	}
+
+	g_pGameConf->GetMemSig("modelloader", (void **)&modelloader);
+	if(modelloader == nullptr) {
+		snprintf(error, maxlen, "could not get modelloader address");
+		return false;
+	}
+
+	g_pGameConf->GetMemSig("ActivityList_NameForIndex", &ActivityList_NameForIndexPtr);
+	if(ActivityList_NameForIndexPtr == nullptr) {
+		snprintf(error, maxlen, "could not get ActivityList_NameForIndex address");
+		return false;
+	}
+
+	g_pGameConf->GetMemSig("ActivityList_IndexForName", &ActivityList_IndexForNamePtr);
+	if(ActivityList_IndexForNamePtr == nullptr) {
+		snprintf(error, maxlen, "could not get ActivityList_IndexForName address");
+		return false;
+	}
+
+	g_pGameConf->GetMemSig("ActivityList_RegisterPrivateActivity", &ActivityList_RegisterPrivateActivityPtr);
+	if(ActivityList_RegisterPrivateActivityPtr == nullptr) {
+		snprintf(error, maxlen, "could not get ActivityList_RegisterPrivateActivity address");
+		return false;
+	}
+
+	g_pGameConf->GetMemSig("EventList_NameForIndex", &EventList_NameForIndexPtr);
+	if(EventList_NameForIndexPtr == nullptr) {
+		snprintf(error, maxlen, "could not get EventList_NameForIndex address");
+		return false;
+	}
+
+	g_pGameConf->GetMemSig("EventList_IndexForName", &EventList_IndexForNamePtr);
+	if(EventList_IndexForNamePtr == nullptr) {
+		snprintf(error, maxlen, "could not get EventList_IndexForName address");
+		return false;
+	}
+
+	g_pGameConf->GetMemSig("EventList_RegisterPrivateEvent", &EventList_RegisterPrivateEventPtr);
+	if(EventList_RegisterPrivateEventPtr == nullptr) {
+		snprintf(error, maxlen, "could not get EventList_RegisterPrivateEvent address");
+		return false;
+	}
+
+	g_pGameConf->GetMemSig("EventList_GetEventType", &EventList_GetEventTypePtr);
+	if(EventList_GetEventTypePtr == nullptr) {
+		snprintf(error, maxlen, "could not get EventList_GetEventType address");
+		return false;
+	}
+
+	g_pGameConf->GetMemSig("g_nActivityListVersion", (void **)&g_nActivityListVersion);
+	if(g_nActivityListVersion == nullptr) {
+		snprintf(error, maxlen, "could not get g_nActivityListVersion address");
+		return false;
+	}
+
+	g_pGameConf->GetMemSig("g_nEventListVersion", (void **)&g_nEventListVersion);
+	if(g_nEventListVersion == nullptr) {
+		snprintf(error, maxlen, "could not get g_nEventListVersion address");
+		return false;
+	}
 
 	CDetourManager::Init(g_pSM->GetScriptingEngine(), g_pGameConf);
 
-	g_pGameConf->GetOffset("CBaseAnimating::HandleAnimEvent", &CBaseAnimatingHandleAnimEvent);
-	SH_MANUALHOOK_RECONFIGURE(HandleAnimEvent, CBaseAnimatingHandleAnimEvent, 0, 0);
-	
-	g_pGameConf->GetOffset("CBaseEntity::WorldSpaceCenter", &CBaseEntityWorldSpaceCenter);
-	g_pGameConf->GetOffset("CBaseEntity::EyePosition", &CBaseEntityEyePosition);
-
-	g_pGameConf->GetMemSig("CBaseEntity::CollisionRulesChanged", &CBaseEntityCollisionRulesChanged);
-	g_pGameConf->GetMemSig("EntityTouch_Add", &EntityTouch_AddPtr);
-
-	g_pGameConf->GetOffset("CBaseAnimating::m_pStudioHdr", &m_pStudioHdrOffset);
-	
-	g_pGameConf->GetOffset("CBaseAnimating::StudioFrameAdvance", &CBaseAnimatingStudioFrameAdvance);
-	g_pGameConf->GetOffset("CBaseAnimating::DispatchAnimEvents", &CBaseAnimatingDispatchAnimEvents);
-	g_pGameConf->GetOffset("CBaseAnimating::GetAttachment", &CBaseAnimatingGetAttachment);
-	g_pGameConf->GetOffset("CBaseAnimating::GetBoneTransform", &CBaseAnimatingGetBoneTransform);
-	
-	g_pGameConf->GetMemSig("CBaseAnimating::ResetSequenceInfo", &CBaseAnimatingResetSequenceInfo);
-	g_pGameConf->GetMemSig("CBaseAnimating::LockStudioHdr", &CBaseAnimatingLockStudioHdr);
-	g_pGameConf->GetMemSig("CBaseEntity::CalcAbsolutePosition", &CBaseEntityCalcAbsolutePosition);
-	g_pGameConf->GetMemSig("CBaseEntity::SetAbsOrigin", &CBaseEntitySetAbsOrigin);
-	g_pGameConf->GetMemSig("modelloader", (void **)&modelloader);
-
-	g_pGameConf->GetMemSig("ActivityList_NameForIndex", &ActivityList_NameForIndexPtr);
-	g_pGameConf->GetMemSig("ActivityList_IndexForName", &ActivityList_IndexForNamePtr);
-	g_pGameConf->GetMemSig("ActivityList_RegisterPrivateActivity", &ActivityList_RegisterPrivateActivityPtr);
-
-	g_pGameConf->GetMemSig("EventList_NameForIndex", &EventList_NameForIndexPtr);
-	g_pGameConf->GetMemSig("EventList_IndexForName", &EventList_IndexForNamePtr);
-	g_pGameConf->GetMemSig("EventList_RegisterPrivateEvent", &EventList_RegisterPrivateEventPtr);
-	g_pGameConf->GetMemSig("EventList_GetEventType", &EventList_GetEventTypePtr);
-
-	g_pGameConf->GetMemSig("g_nActivityListVersion", (void **)&g_nActivityListVersion);
-	g_pGameConf->GetMemSig("g_nEventListVersion", (void **)&g_nEventListVersion);
-
 	SV_ComputeClientPacks_detour = DETOUR_CREATE_STATIC(SV_ComputeClientPacks, "SV_ComputeClientPacks");
+	if(!SV_ComputeClientPacks_detour) {
+		snprintf(error, maxlen, "could not create SV_ComputeClientPacks detour");
+		return false;
+	}
+
+	SH_MANUALHOOK_RECONFIGURE(HandleAnimEvent, CBaseAnimatingHandleAnimEvent, 0, 0);
+	SH_MANUALHOOK_RECONFIGURE(UpdateOnRemove, CBaseEntityUpdateOnRemove, 0, 0);
 
 	g_pEntityList = reinterpret_cast<CBaseEntityList *>(gamehelpers->GetGlobalEntityList());
 
@@ -5077,7 +5202,7 @@ bool Sample::QueryInterfaceDrop(SMInterface *pInterface)
 	if(pInterface == proxysend)
 		return false;
 #endif
-	
+
 	return IExtensionInterface::QueryInterfaceDrop(pInterface);
 }
 
