@@ -5,6 +5,8 @@
 
 #include <sdktools>
 
+#define RAGDOLL_MAX_ELEMENTS 24
+
 #define SOLID_NONE 0
 #define FSOLID_NOT_SOLID 0x0004
 
@@ -39,6 +41,8 @@ native void SetMaterialVar(int entity, const char[] material, const char[] varia
 
 typedef matproxy_func_t = function void (int entity, const char[] material, KeyValues data);
 native Handle RegisterMatProxy(const char[] name, matproxy_func_t func);
+
+native int RagdollExtractBoneIndices(const char[] model, int[] boneIndexOut, int length);
 
 native Activity AnimatingLookupActivity(int entity, const char[] name);
 native int AnimatingSelectWeightedSequence(int entity, Activity activity);

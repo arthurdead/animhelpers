@@ -66,6 +66,7 @@ class IStaticPropMgrServer *staticpropmgr = nullptr;
 #include <materialsystem/imaterial.h>
 #include <materialsystem/imaterialsystem.h>
 #include <bspfile.h>
+#include <vphysics_interface.h>
 
 #include <unordered_map>
 #include <vector>
@@ -87,6 +88,7 @@ IMDLCache *mdlcache = nullptr;
 IFileSystem *filesystem = nullptr;
 IMaterialSystem *materials = nullptr;
 ISpatialPartition *partition{nullptr};
+IPhysicsCollision *physcollision{nullptr};
 
 #ifdef __HAS_PROXYSEND
 class proxysend *proxysend = nullptr;
@@ -270,6 +272,7 @@ struct AI_CriteriaSet;
 #include <shared/predictioncopy.h>
 #include <util.h>
 #include <ServerNetworkProperty.h>
+#include <vcollide_parse.h>
 
 CBaseEntityList *g_pEntityList = nullptr;
 
@@ -4335,6 +4338,105 @@ static cell_t ModelInfoGetModel(IPluginContext *pContext, const cell_t *params)
 	return (cell_t)modelinfo->GetModel(params[1]);
 }
 
+int RagdollExtractBoneIndices( cell_t *boneIndexOut, int max, CStudioHdr *pStudioHdr, vcollide_t *pCollide )
+{
+	int elementCount = 0;
+
+	IVPhysicsKeyParser *pParse = physcollision->VPhysicsKeyParserCreate( pCollide->pKeyValues );
+	while ( !pParse->Finished() )
+	{
+		const char *pBlock = pParse->GetCurrentBlockName();
+		if ( !strcasecmp( pBlock, "solid" ) )
+		{
+			solid_t solid;
+			pParse->ParseSolid( &solid, NULL );
+			if ( elementCount < max )
+			{
+				boneIndexOut[elementCount] = Studio_BoneIndexByName( pStudioHdr, solid.name );
+				elementCount++;
+			}
+		}
+		else
+		{
+			pParse->SkipBlock();
+		}
+	}
+	physcollision->VPhysicsKeyParserDestroy( pParse );
+
+	return elementCount;
+}
+
+CStudioHdr *GetModelPtr(const model_t *mod)
+{
+	MDLHandle_t hStudioHdr = modelinfo->GetCacheHandle(mod);
+	if(hStudioHdr == MDLHANDLE_INVALID) {
+		return nullptr;
+	}
+
+	const studiohdr_t *pStudioHdr = mdlcache->LockStudioHdr(hStudioHdr);
+	if(!pStudioHdr) {
+		return nullptr;
+	}
+
+	CStudioHdr *pStudioHdrContainer = new CStudioHdr;
+	pStudioHdrContainer->Init( pStudioHdr, mdlcache );
+
+	if(pStudioHdrContainer && pStudioHdrContainer->GetVirtualModel()) {
+		MDLHandle_t hVirtualModel = (MDLHandle_t)(int)(pStudioHdrContainer->GetRenderHdr()->virtualModel) & 0xffff;
+		mdlcache->LockStudioHdr(hVirtualModel);
+	}
+
+	return pStudioHdrContainer;
+}
+
+void FreeModelPtr(const model_t *mod, CStudioHdr *pStudioHdrContainer)
+{
+	MDLHandle_t hStudioHdr = modelinfo->GetCacheHandle(mod);
+	mdlcache->UnlockStudioHdr(hStudioHdr);
+
+	if(pStudioHdrContainer->GetVirtualModel()) {
+		MDLHandle_t hVirtualModel = (MDLHandle_t)(int)(pStudioHdrContainer->GetRenderHdr()->virtualModel) & 0xffff;
+		mdlcache->UnlockStudioHdr( hVirtualModel );
+	}
+
+	delete pStudioHdrContainer;
+}
+
+static cell_t RagdollExtractBoneIndicesNative(IPluginContext *pContext, const cell_t *params)
+{
+	char *model = nullptr;
+	pContext->LocalToString(params[1], &model);
+
+	int idx = modelinfo->GetModelIndex(model);
+	if(idx == -1) {
+		return pContext->ThrowNativeError("invalid model %s", model);
+	}
+
+	vcollide_t *pCollide = modelinfo->GetVCollide(idx);
+	if(!pCollide) {
+		return pContext->ThrowNativeError("%s missing vcollide data", model);
+	}
+
+	const model_t *mod = modelinfo->GetModel(idx);
+	if(!mod) {
+		return pContext->ThrowNativeError("invalid model %s", model);
+	}
+
+	CStudioHdr *pStudioHdrContainer = GetModelPtr(mod);
+	if(!pStudioHdrContainer) {
+		return pContext->ThrowNativeError("invalid model %s", model);
+	}
+
+	cell_t *addr;
+	pContext->LocalToPhysAddr(params[2], &addr);
+
+	int num = RagdollExtractBoneIndices(addr, params[3], pStudioHdrContainer, pCollide);
+
+	FreeModelPtr(mod, pStudioHdrContainer);
+
+	return num;
+}
+
 #include <tier1/mempool.h>
 
 #if SOURCE_ENGINE == SE_TF2
@@ -4376,6 +4478,7 @@ static cell_t register_matproxy(IPluginContext *pContext, const cell_t *params);
 
 static const sp_nativeinfo_t g_sNativesInfo[] =
 {
+	{"RagdollExtractBoneIndices", RagdollExtractBoneIndicesNative},
 	{"RegisterMatProxy", register_matproxy},
 	{"EntitySetAbsOrigin", BaseEntitySetAbsOrigin},
 	{"EntityWorldSpaceCenter", BaseEntityWorldSpaceCenter},
@@ -4702,6 +4805,7 @@ public:
 		"MaterialModifyAnimated"sv,
 		"LessOrEqual"sv,
 		"Monitor"sv,
+		"lampbeam"sv,
 	#if SOURCE_ENGINE == SE_TF2
 		"ItemTintColor"sv,
 		"vm_invis"sv,
@@ -4724,14 +4828,22 @@ public:
 		"StatTrakDigit"sv,
 		"StatTrakIllum"sv,
 		"InvulnLevel"sv,
+		"HeartbeatScale"sv,
+		"BenefactorLevel"sv,
 	#endif
 	};
 
-	static bool is_default_proxy(std::string_view name)
+	static bool is_default_proxy(std::string_view name, bool casesen)
 	{
 		for(std::string_view def : default_proxies) {
-			if(def == name) {
-				return true;
+			if(casesen) {
+				if(def == name) {
+					return true;
+				}
+			} else {
+				if(strcasecmp(def.data(), name.data()) == 0) {
+					return true;
+				}
 			}
 		}
 		return false;
@@ -4741,11 +4853,17 @@ public:
 	{
 		std::string name{proxyName};
 
-		if(is_default_proxy(name)) {
+		if(is_default_proxy(name, false)) {
 			return new CDummyMaterialProxy{};
 		}
 
-		auto it{matproxy_entries.find(name)};
+		auto it{
+			std::find_if(matproxy_entries.cbegin(), matproxy_entries.cend(),
+				[&name = std::as_const(name)](const auto &it) noexcept -> bool {
+					return (strncasecmp(it.first.c_str(), name.c_str(), it.first.length()) == 0);
+				}
+			)
+		};
 		if(it == matproxy_entries.cend()) {
 			return nullptr;
 		}
@@ -4770,7 +4888,7 @@ static cell_t register_matproxy(IPluginContext *pContext, const cell_t *params)
 	std::string name{name_ptr};
 	
 	auto it{matproxy_entries.find(name)};
-	if(it != matproxy_entries.cend()) {
+	if(CSPMaterialProxyFactory::is_default_proxy(name, true) || it != matproxy_entries.cend()) {
 		return pContext->ThrowNativeError("%s is already registered", name_ptr);
 	}
 
@@ -4787,20 +4905,6 @@ class CGameClient;
 
 class CFrameSnapshot
 {
-	DECLARE_FIXEDSIZE_ALLOCATOR( CFrameSnapshot );
-
-public:
-
-							CFrameSnapshot();
-							~CFrameSnapshot();
-
-	// Reference-counting.
-	void					AddReference();
-	void					ReleaseReference();
-
-	CFrameSnapshot*			NextSnapshot() const;						
-
-
 public:
 	CInterlockedInt			m_ListIndex;	// Index info CFrameSnapshotManager::m_FrameSnapshots.
 
@@ -4871,10 +4975,6 @@ void Sample::pre_pack_entity(CBaseEntity *pEntity) const noexcept
 		return;
 	}
 
-	if(modelinfo->GetModelType(mdlptr) != mod_studio) {
-		return;
-	}
-
 	MDLHandle_t mdlhndl = modelinfo->GetCacheHandle(mdlptr);
 	if(mdlhndl == MDLHANDLE_INVALID) {
 		return;
@@ -4911,6 +5011,7 @@ bool Sample::SDK_OnMetamodLoad(ISmmAPI *ismm, char *error, size_t maxlen, bool l
 	GET_V_IFACE_CURRENT(GetEngineFactory, mdlcache, IMDLCache, MDLCACHE_INTERFACE_VERSION)
 	GET_V_IFACE_CURRENT(GetEngineFactory, materials, IMaterialSystem, MATERIAL_SYSTEM_INTERFACE_VERSION)
 	GET_V_IFACE_CURRENT(GetEngineFactory, partition, ISpatialPartition, INTERFACEVERSION_SPATIALPARTITION)
+	GET_V_IFACE_CURRENT(GetEngineFactory, physcollision, IPhysicsCollision, VPHYSICS_COLLISION_INTERFACE_VERSION)
 
 	materials->SetMaterialProxyFactory(&proxyfactory);
 
