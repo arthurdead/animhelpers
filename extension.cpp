@@ -4606,8 +4606,14 @@ static const sp_nativeinfo_t g_sNativesInfo[] =
 class CDummyMaterialProxy : public IMaterialProxy
 {
 public:
+	CDummyMaterialProxy(std::string &&name_)
+		: name{std::move(name_)}
+	{
+	}
+
 	bool Init( IMaterial* pMaterial, KeyValues *pKeyValues ) override
 	{
+		m_pMaterial = pMaterial;
 		return true;
 	}
 
@@ -4623,11 +4629,14 @@ public:
 
 	void Release() override
 	{
-		
+		m_pMaterial = nullptr;
 	}
 
 	IMaterial *GetMaterial() override
-	{ return nullptr; }
+	{ return m_pMaterial; }
+
+	IMaterial *m_pMaterial = nullptr;
+	std::string name;
 };
 
 #include "funnyfile.h"
@@ -4640,7 +4649,7 @@ class CSPMaterialProxy : public CDummyMaterialProxy
 {
 public:
 	CSPMaterialProxy(std::string &&name_, IPluginFunction *func_)
-		: CDummyMaterialProxy{}, name{name_}, func{func_}
+		: CDummyMaterialProxy{std::move(name_)}, func{func_}
 	{
 	}
 
@@ -4650,7 +4659,6 @@ public:
 			return false;
 		}
 
-		m_pMaterial = pMaterial;
 		m_pKeyValues = new KeyValues{""};
 		m_pKeyValues->RecursiveMergeKeyValues(pKeyValues);
 
@@ -4663,9 +4671,6 @@ public:
 			m_pKeyValues->deleteThis();
 		}
 	}
-
-	IMaterial *GetMaterial() override
-	{ return m_pMaterial; }
 
 	void OnBind( void *pObject ) override
 	{
@@ -4697,7 +4702,6 @@ public:
 
 	void Release() override
 	{
-		m_pMaterial = nullptr;
 		m_pKeyValues->deleteThis();
 		m_pKeyValues = nullptr;
 
@@ -4708,9 +4712,7 @@ public:
 
 	void EntryDeleted();
 
-	IMaterial *m_pMaterial = nullptr;
 	KeyValues *m_pKeyValues = nullptr;
-	std::string name;
 
 	IPluginFunction *func = nullptr;
 	matproxy_entry_t *entry = nullptr;
@@ -4740,10 +4742,9 @@ struct matproxy_entry_t
 		}
 	}
 
-	IMaterialProxy *create()
+	IMaterialProxy *create(std::string &&name_)
 	{
-		std::string tmpname{name};
-		CSPMaterialProxy *ptr{new CSPMaterialProxy{std::move(tmpname), func}};
+		CSPMaterialProxy *ptr{new CSPMaterialProxy{std::move(name_), func}};
 		ptr->entry = this;
 		childs.emplace_back(ptr);
 		return ptr;
@@ -4854,7 +4855,7 @@ public:
 		std::string name{proxyName};
 
 		if(is_default_proxy(name, false)) {
-			return new CDummyMaterialProxy{};
+			return new CDummyMaterialProxy{std::move(name)};
 		}
 
 		matproxy_entries_t::const_iterator it{
@@ -4868,7 +4869,7 @@ public:
 			return nullptr;
 		}
 
-		return it->second->create();
+		return it->second->create(std::move(name));
 	}
 
 	void DeleteProxy(IMaterialProxy *pProxy) override
@@ -5213,7 +5214,7 @@ bool Sample::SDK_OnLoad(char *error, size_t maxlen, bool late)
 
 	CDetourManager::Init(g_pSM->GetScriptingEngine(), g_pGameConf);
 
-	SV_ComputeClientPacks_detour = DETOUR_CREATE_STATIC(SV_ComputeClientPacks, "s_ComputeClientPacks");
+	SV_ComputeClientPacks_detour = DETOUR_CREATE_STATIC(SV_ComputeClientPacks, "SV_ComputeClientPacks");
 	if(!SV_ComputeClientPacks_detour) {
 		snprintf(error, maxlen, "could not create SV_ComputeClientPacks detour");
 		return false;
