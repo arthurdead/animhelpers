@@ -71,12 +71,10 @@ class IStaticPropMgrServer *staticpropmgr = nullptr;
 #include <unordered_map>
 #include <vector>
 #include <string>
-#include <string_view>
 #include <functional>
 #include <IForwardSys.h>
 
 using namespace std::literals::string_literals;
-using namespace std::literals::string_view_literals;
 
 int *g_nActivityListVersion = nullptr;
 int *g_nEventListVersion = nullptr;
@@ -4718,7 +4716,8 @@ public:
 	matproxy_entry_t *entry = nullptr;
 };
 
-std::unordered_map<std::string, matproxy_entry_t *> matproxy_entries;
+using matproxy_entries_t = std::unordered_map<std::string, matproxy_entry_t *>;
+matproxy_entries_t matproxy_entries;
 
 struct matproxy_entry_t
 {
@@ -4735,7 +4734,7 @@ struct matproxy_entry_t
 			it->EntryDeleted();
 		}
 
-		auto it{matproxy_entries.find(name)};
+		matproxy_entries_t::iterator it{matproxy_entries.find(name)};
 		if(it != matproxy_entries.cend()) {
 			matproxy_entries.erase(it);
 		}
@@ -4752,14 +4751,15 @@ struct matproxy_entry_t
 
 	void child_deleted(CSPMaterialProxy *ptr)
 	{
-		auto it{std::find(childs.begin(), childs.end(), ptr)};
+		childs_t::iterator it{std::find(childs.begin(), childs.end(), ptr)};
 		if(it != childs.end()) {
 			childs.erase(it);
 		}
 	}
 
 	IPluginFunction *func = nullptr;
-	std::vector<CSPMaterialProxy *> childs;
+	using childs_t = std::vector<CSPMaterialProxy *>;
+	childs_t childs;
 	std::string name;
 };
 
@@ -4781,67 +4781,67 @@ void Sample::OnHandleDestroy(HandleType_t type, void *object)
 	}
 }
 
+std::string default_proxies[]{
+	"ParticleSphereProxy"s,
+	"TextureScroll"s,
+	"Sine"s,
+	"LinearRamp"s,
+	"Add"s,
+	"TextureTransform"s,
+	"SelectFirstIfNonZero"s,
+	"AnimatedTexture"s,
+	"WaterLOD"s,
+	"Equals"s,
+	"PlayerProximity"s,
+	"Divide"s,
+	"Multiply"s,
+	"Subtract"s,
+	"Clamp"s,
+	"PlayerTeamMatch"s,
+	"MaterialModify"s,
+	"MaterialModifyAnimated"s,
+	"LessOrEqual"s,
+	"Monitor"s,
+	"lampbeam"s,
+#if SOURCE_ENGINE == SE_TF2
+	"ItemTintColor"s,
+	"vm_invis"s,
+	"CustomSteamImageOnModel"s,
+	"ModelGlowColor"s,
+	"AnimatedWeaponSheen"s,
+	"YellowLevel"s,
+	"weapon_invis"s,
+	"invis"s,
+	"BurnLevel"s,
+	"CommunityWeapon"s,
+	"StickybombGlowColor"s,
+	"building_invis"s,
+	"ShieldFalloff"s,
+	"WeaponSkin"s,
+	"spy_invis"s,
+	"WheatlyEyeGlow"s,
+	"BuildingRescueLevel"s,
+	"StatTrakIcon"s,
+	"StatTrakDigit"s,
+	"StatTrakIllum"s,
+	"InvulnLevel"s,
+	"HeartbeatScale"s,
+	"BenefactorLevel"s,
+#endif
+};
+
 class CSPMaterialProxyFactory : public IMaterialProxyFactory
 {
 public:
-	static inline std::string_view default_proxies[]{
-		"ParticleSphereProxy"sv,
-		"TextureScroll"sv,
-		"Sine"sv,
-		"LinearRamp"sv,
-		"Add"sv,
-		"TextureTransform"sv,
-		"SelectFirstIfNonZero"sv,
-		"AnimatedTexture"sv,
-		"WaterLOD"sv,
-		"Equals"sv,
-		"PlayerProximity"sv,
-		"Divide"sv,
-		"Multiply"sv,
-		"Subtract"sv,
-		"Clamp"sv,
-		"PlayerTeamMatch"sv,
-		"MaterialModify"sv,
-		"MaterialModifyAnimated"sv,
-		"LessOrEqual"sv,
-		"Monitor"sv,
-		"lampbeam"sv,
-	#if SOURCE_ENGINE == SE_TF2
-		"ItemTintColor"sv,
-		"vm_invis"sv,
-		"CustomSteamImageOnModel"sv,
-		"ModelGlowColor"sv,
-		"AnimatedWeaponSheen"sv,
-		"YellowLevel"sv,
-		"weapon_invis"sv,
-		"invis"sv,
-		"BurnLevel"sv,
-		"CommunityWeapon"sv,
-		"StickybombGlowColor"sv,
-		"building_invis"sv,
-		"ShieldFalloff"sv,
-		"WeaponSkin"sv,
-		"spy_invis"sv,
-		"WheatlyEyeGlow"sv,
-		"BuildingRescueLevel"sv,
-		"StatTrakIcon"sv,
-		"StatTrakDigit"sv,
-		"StatTrakIllum"sv,
-		"InvulnLevel"sv,
-		"HeartbeatScale"sv,
-		"BenefactorLevel"sv,
-	#endif
-	};
-
-	static bool is_default_proxy(std::string_view name, bool casesen)
+	static bool is_default_proxy(const std::string &name, bool casesen)
 	{
-		for(std::string_view def : default_proxies) {
+		for(const std::string &def : default_proxies) {
 			if(casesen) {
 				if(def == name) {
 					return true;
 				}
 			} else {
-				if(strcasecmp(def.data(), name.data()) == 0) {
+				if(strcasecmp(def.c_str(), name.c_str()) == 0) {
 					return true;
 				}
 			}
@@ -4857,9 +4857,9 @@ public:
 			return new CDummyMaterialProxy{};
 		}
 
-		auto it{
+		matproxy_entries_t::const_iterator it{
 			std::find_if(matproxy_entries.cbegin(), matproxy_entries.cend(),
-				[&name = std::as_const(name)](const auto &it) noexcept -> bool {
+				[&name](const auto &it) noexcept -> bool {
 					return (strncasecmp(it.first.c_str(), name.c_str(), it.first.length()) == 0);
 				}
 			)
@@ -4887,7 +4887,7 @@ static cell_t register_matproxy(IPluginContext *pContext, const cell_t *params)
 	pContext->LocalToString(params[1], &name_ptr);
 	std::string name{name_ptr};
 	
-	auto it{matproxy_entries.find(name)};
+	matproxy_entries_t::iterator it{matproxy_entries.find(name)};
 	if(CSPMaterialProxyFactory::is_default_proxy(name, true) || it != matproxy_entries.cend()) {
 		return pContext->ThrowNativeError("%s is already registered", name_ptr);
 	}
@@ -5023,9 +5023,10 @@ void Sample::OnPluginUnloaded(IPlugin *plugin)
 	callback_holder_map_t::iterator it{callbackmap.begin()};
 	while(it != callbackmap.end()) {
 		callback_holder_t *holder = it->second;
-		std::vector<IdentityToken_t *> &owners{holder->owners};
+		using owners_t = std::vector<IdentityToken_t *>;
+		owners_t &owners{holder->owners};
 
-		auto it_own{std::find(owners.begin(), owners.end(), plugin->GetIdentity())};
+		owners_t::iterator it_own{std::find(owners.begin(), owners.end(), plugin->GetIdentity())};
 		if(it_own != owners.cend()) {
 			owners.erase(it_own);
 
@@ -5212,7 +5213,7 @@ bool Sample::SDK_OnLoad(char *error, size_t maxlen, bool late)
 
 	CDetourManager::Init(g_pSM->GetScriptingEngine(), g_pGameConf);
 
-	SV_ComputeClientPacks_detour = DETOUR_CREATE_STATIC(SV_ComputeClientPacks, "SV_ComputeClientPacks");
+	SV_ComputeClientPacks_detour = DETOUR_CREATE_STATIC(SV_ComputeClientPacks, "s_ComputeClientPacks");
 	if(!SV_ComputeClientPacks_detour) {
 		snprintf(error, maxlen, "could not create SV_ComputeClientPacks detour");
 		return false;
