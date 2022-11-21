@@ -163,6 +163,10 @@
 			{
 				"linux" "211"
 			}
+			"CBaseAnimating::OnNewModel"
+			{
+				"linux" "26"
+			}
 			"CBaseAnimating::m_pStudioHdr"
 			{
 				"linux" "60"

@@ -3515,6 +3515,7 @@ static cell_t EventList_NameForIndexNative(IPluginContext *pContext, const cell_
 
 SH_DECL_MANUALHOOK0_void(GenericDtor, 1, 0, 0)
 SH_DECL_MANUALHOOK1_void(HandleAnimEvent, 0, 0, 0, animevent_t *)
+SH_DECL_MANUALHOOK0_void(OnNewModel, 0, 0, 0)
 
 #define ANIMEVENT_OPTIONS_STR_SIZE 64
 #define ANIMEVENT_OPTIONS_STR_SIZE_IN_CELL (ANIMEVENT_OPTIONS_STR_SIZE / sizeof(cell_t))
@@ -3577,7 +3578,9 @@ SH_DECL_MANUALHOOK0_void(UpdateOnRemove, 0, 0, 0)
 
 struct callback_holder_t
 {
-	IChangeableForward *fwd = nullptr;
+	IChangeableForward *fwd_animevent = nullptr;
+	IChangeableForward *fwd_onnewmodel = nullptr;
+
 	std::vector<IdentityToken_t *> owners{};
 	int ref = -1;
 	std::vector<int> hookids{};
@@ -3596,7 +3599,7 @@ struct callback_holder_t
 	
 	void HookHandleAnimEvent(animevent_t *pEvent)
 	{
-		if(!fwd || fwd->GetFunctionCount() == 0) {
+		if(!fwd_animevent || fwd_animevent->GetFunctionCount() == 0) {
 			RETURN_META(MRES_IGNORED);
 		}
 
@@ -3605,10 +3608,10 @@ struct callback_holder_t
 		
 		CBaseEntity *pEntity = META_IFACEPTR(CBaseEntity);
 		
-		fwd->PushCell(gamehelpers->EntityToBCompatRef(pEntity));
-		fwd->PushArray(addr, ANIMEVENT_STRUCT_SIZE_IN_CELL, SM_PARAM_COPYBACK);
+		fwd_animevent->PushCell(gamehelpers->EntityToBCompatRef(pEntity));
+		fwd_animevent->PushArray(addr, ANIMEVENT_STRUCT_SIZE_IN_CELL, SM_PARAM_COPYBACK);
 		cell_t res = 0;
-		fwd->Execute(&res);
+		fwd_animevent->Execute(&res);
 		
 		switch(res) {
 			case Pl_Continue: {
@@ -3625,6 +3628,44 @@ struct callback_holder_t
 				RETURN_META(MRES_SUPERCEDE);
 			}
 		}
+	}
+
+	void HookOnNewModel()
+	{
+		if(!fwd_onnewmodel || fwd_onnewmodel->GetFunctionCount() == 0) {
+			RETURN_META(MRES_IGNORED);
+		}
+
+		CBaseEntity *pEntity = META_IFACEPTR(CBaseEntity);
+		
+		fwd_onnewmodel->PushCell(gamehelpers->EntityToBCompatRef(pEntity));
+		fwd_onnewmodel->Execute(nullptr);
+		
+		RETURN_META(MRES_HANDLED);
+	}
+
+	void AddAnimEventFunc(IPluginFunction *func, CBaseEntity *pEntity)
+	{
+		if(!fwd_animevent) {
+			hookids.emplace_back(SH_ADD_MANUALHOOK(HandleAnimEvent, pEntity, SH_MEMBER(this, &callback_holder_t::HookHandleAnimEvent), false));
+
+			fwd_animevent = forwards->CreateForwardEx(nullptr, ET_Hook, 2, nullptr, Param_Cell, Param_Array);
+		}
+
+		fwd_animevent->RemoveFunction(func);
+		fwd_animevent->AddFunction(func);
+	}
+
+	void AddOnNewModelFunc(IPluginFunction *func, CBaseEntity *pEntity)
+	{
+		if(!fwd_onnewmodel) {
+			hookids.emplace_back(SH_ADD_MANUALHOOK(OnNewModel, pEntity, SH_MEMBER(this, &callback_holder_t::HookOnNewModel), true));
+
+			fwd_onnewmodel = forwards->CreateForwardEx(nullptr, ET_Ignore, 1, nullptr, Param_Cell);
+		}
+
+		fwd_onnewmodel->RemoveFunction(func);
+		fwd_onnewmodel->AddFunction(func);
 	}
 };
 
@@ -3645,17 +3686,17 @@ callback_holder_t::callback_holder_t(CBaseEntity *pEntity, int ref_)
 	: ref{ref_}
 {
 	hookids.emplace_back(SH_ADD_MANUALHOOK(UpdateOnRemove, pEntity, SH_MEMBER(this, &callback_holder_t::HookEntityRemove), false));
-	hookids.emplace_back(SH_ADD_MANUALHOOK(HandleAnimEvent, pEntity, SH_MEMBER(this, &callback_holder_t::HookHandleAnimEvent), false));
-
-	fwd = forwards->CreateForwardEx(nullptr, ET_Hook, 2, nullptr, Param_Cell, Param_Array);
 
 	callbackmap.emplace(ref, this);
 }
 
 callback_holder_t::~callback_holder_t()
 {
-	if(fwd) {
-		forwards->ReleaseForward(fwd);
+	if(fwd_animevent) {
+		forwards->ReleaseForward(fwd_animevent);
+	}
+	if(fwd_onnewmodel) {
+		forwards->ReleaseForward(fwd_onnewmodel);
 	}
 }
 
@@ -3679,14 +3720,43 @@ static cell_t BaseAnimatingSetHandleAnimEvent(IPluginContext *pContext, const ce
 	
 	IPluginFunction *func = pContext->GetFunctionById(params[2]);
 
-	holder->fwd->RemoveFunction(func);
-	holder->fwd->AddFunction(func);
+	holder->AddAnimEventFunc(func, pEntity);
 
 	IdentityToken_t *iden{pContext->GetIdentity()};
 	if(std::find(holder->owners.cbegin(), holder->owners.cend(), iden) == holder->owners.cend()) {
 		holder->owners.emplace_back(iden);
 	}
+
+	return 0;
+}
+
+static cell_t AnimatingHookOnNewModel(IPluginContext *pContext, const cell_t *params)
+{
+	CBaseEntity *pEntity = gamehelpers->ReferenceToEntity(params[1]);
+	if(!pEntity) {
+		return pContext->ThrowNativeError("Invalid Entity Reference/Index %i", params[1]);
+	}
 	
+	callback_holder_t *holder = nullptr;
+
+	int ref = gamehelpers->EntityToReference(pEntity);
+	
+	callback_holder_map_t::iterator it{callbackmap.find(ref)};
+	if(it != callbackmap.end()) {
+		holder = it->second;
+	} else {
+		holder = new callback_holder_t{pEntity, ref};
+	}
+	
+	IPluginFunction *func = pContext->GetFunctionById(params[2]);
+
+	holder->AddOnNewModelFunc(func, pEntity);
+
+	IdentityToken_t *iden{pContext->GetIdentity()};
+	if(std::find(holder->owners.cbegin(), holder->owners.cend(), iden) == holder->owners.cend()) {
+		holder->owners.emplace_back(iden);
+	}
+
 	return 0;
 }
 
@@ -4528,6 +4598,7 @@ static const sp_nativeinfo_t g_sNativesInfo[] =
 	{"AnimatingGetBoneController", BaseAnimatingGetBoneControllerEx},
 	{"AnimatingSetBoneController", BaseAnimatingSetBoneControllerEx},
 	{"AnimatingHookHandleAnimEvent", BaseAnimatingSetHandleAnimEvent},
+	{"AnimatingHookOnNewModel", AnimatingHookOnNewModel},
 	{"AnimatingHandleAnimEvent", BaseAnimatingHandleAnimEvent},
 	{"AnimatingGetIntervalMovement", BaseAnimatingGetIntervalMovement},
 	{"AnimatingGetSequenceMovement", BaseAnimatingGetSequenceMovement},
@@ -5033,9 +5104,14 @@ void Sample::OnPluginUnloaded(IPlugin *plugin)
 
 			size_t func_count{0};
 
-			if(holder->fwd) {
-				holder->fwd->RemoveFunctionsOfPlugin(plugin);
-				func_count += holder->fwd->GetFunctionCount();
+			if(holder->fwd_animevent) {
+				holder->fwd_animevent->RemoveFunctionsOfPlugin(plugin);
+				func_count += holder->fwd_animevent->GetFunctionCount();
+			}
+
+			if(holder->fwd_onnewmodel) {
+				holder->fwd_onnewmodel->RemoveFunctionsOfPlugin(plugin);
+				func_count += holder->fwd_onnewmodel->GetFunctionCount();
 			}
 
 			if(func_count == 0) {
@@ -5071,6 +5147,13 @@ bool Sample::SDK_OnLoad(char *error, size_t maxlen, bool late)
 	g_pGameConf->GetOffset("CBaseAnimating::HandleAnimEvent", &CBaseAnimatingHandleAnimEvent);
 	if(CBaseAnimatingHandleAnimEvent == -1) {
 		snprintf(error, maxlen, "could not get CBaseAnimating::HandleAnimEvent offset");
+		return false;
+	}
+
+	int CBaseAnimatingOnNewModel{-1};
+	g_pGameConf->GetOffset("CBaseAnimating::OnNewModel", &CBaseAnimatingOnNewModel);
+	if(CBaseAnimatingOnNewModel == -1) {
+		snprintf(error, maxlen, "could not get CBaseAnimating::OnNewModel offset");
 		return false;
 	}
 
@@ -5220,6 +5303,7 @@ bool Sample::SDK_OnLoad(char *error, size_t maxlen, bool late)
 		return false;
 	}
 
+	SH_MANUALHOOK_RECONFIGURE(OnNewModel, CBaseAnimatingOnNewModel, 0, 0);
 	SH_MANUALHOOK_RECONFIGURE(HandleAnimEvent, CBaseAnimatingHandleAnimEvent, 0, 0);
 	SH_MANUALHOOK_RECONFIGURE(UpdateOnRemove, CBaseEntityUpdateOnRemove, 0, 0);
 

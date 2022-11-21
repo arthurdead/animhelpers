@@ -120,6 +120,9 @@ typedef handleanimevent_func_t = function Action (int entity, animevent_t event)
 native void AnimatingHookHandleAnimEvent(int entity, handleanimevent_func_t func);
 native void AnimatingHandleAnimEvent(int entity, animevent_tVar event);
 
+typedef newmodel_func_t = function void (int entity);
+native void AnimatingHookOnNewModel(int entity, newmodel_func_t func);
+
 native bool AnimatingGetIntervalMovement(int entity, bool &bMoveSeqFinished = false, float pos[3] = NULL_VECTOR, float ang[3] = NULL_VECTOR);
 native bool AnimatingGetSequenceMovement(int entity, bool &bMoveSeqFinished = false, float pos[3] = NULL_VECTOR, float ang[3] = NULL_VECTOR);
 
