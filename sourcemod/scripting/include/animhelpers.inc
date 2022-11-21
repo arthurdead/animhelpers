@@ -5,10 +5,12 @@
 
 #include <sdktools>
 
-#define RAGDOLL_MAX_ELEMENTS 24
-
 #define SOLID_NONE 0
 #define FSOLID_NOT_SOLID 0x0004
+
+#define RAGDOLL_MAX_ELEMENTS 24
+#define RAGDOLL_INDEX_BITS 5
+#define MAXSTUDIOBONEBITS 7
 
 enum struct animevent_t
 {
