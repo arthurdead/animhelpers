@@ -10,7 +10,9 @@
 
 #define RAGDOLL_MAX_ELEMENTS 24
 #define RAGDOLL_INDEX_BITS 5
+
 #define MAXSTUDIOBONEBITS 7
+#define ANIMATION_SEQUENCE_BITS 12
 
 enum struct animevent_t
 {

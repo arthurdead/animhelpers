@@ -137,35 +137,35 @@
 		{
 			"CBaseEntity::WorldSpaceCenter"
 			{
-				"linux" "153"
+				"linux" "156"
 			}
 			"CBaseEntity::EyePosition"
 			{
-				"linux" "134"
+				"linux" "137"
 			}
 			"CBaseAnimating::GetBoneTransform"
 			{
-				"linux" "207"
+				"linux" "210"
 			}
 			"CBaseAnimating::GetAttachment"
 			{
-				"linux" "213"
+				"linux" "216"
 			}
 			"CBaseAnimating::StudioFrameAdvance"
 			{
-				"linux" "198"
+				"linux" "201"
 			}
 			"CBaseAnimating::DispatchAnimEvents"
 			{
-				"linux" "210"
+				"linux" "213"
 			}
 			"CBaseAnimating::HandleAnimEvent"
 			{
-				"linux" "211"
+				"linux" "214"
 			}
 			"CBaseAnimating::OnNewModel"
 			{
-				"linux" "26"
+				"linux" "28"
 			}
 			"CBaseAnimating::m_pStudioHdr"
 			{
@@ -174,7 +174,7 @@
 			}
 			"CBaseEntity::UpdateOnRemove"
 			{
-				"linux" "109"
+				"linux" "111"
 			}
 		}
 	}

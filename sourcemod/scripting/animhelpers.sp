@@ -556,7 +556,6 @@ static any native_set_material_var(Handle plugin, int params)
 	char value[MATERIAL_MODIFY_STRING_SIZE];
 	GetNativeString(4, value, MATERIAL_MODIFY_STRING_SIZE);
 
-
 	MatVarInfo var_info;
 
 	if(!info.variables.GetArray(variable, var_info, sizeof(MatVarInfo))) {
